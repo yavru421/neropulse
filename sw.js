@@ -1,4 +1,4 @@
-const CACHE_NAME = 'neuropulse-v1.1';
+const CACHE_NAME = 'neuropulse-v1.2'; // Increment version for updates
 const ASSETS = [
   '/',
   '/index.html',
@@ -45,6 +45,16 @@ self.addEventListener('activate', event => {
           }
         })
       );
+    }).then(() => {
+      // After clearing old caches, notify clients about the update
+      self.clients.matchAll().then(clients => {
+        clients.forEach(client => {
+          client.postMessage({
+            type: 'UPDATE_AVAILABLE',
+            version: CACHE_NAME
+          });
+        });
+      });
     })
   );
   
@@ -52,14 +62,34 @@ self.addEventListener('activate', event => {
   return self.clients.claim();
 });
 
-// Fetch event - serve from cache, fallback to network
+// Fetch event - serve from cache, fallback to network with network-first strategy for API endpoints
 self.addEventListener('fetch', event => {
-  // Skip cross-origin requests and API requests
-  if (!event.request.url.startsWith(self.location.origin) || 
-      event.request.url.includes('api.groq.com')) {
+  // Skip cross-origin requests
+  if (!event.request.url.startsWith(self.location.origin)) {
     return;
   }
   
+  // Network-first strategy for API endpoints
+  if (event.request.url.includes('/api/')) {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          // Clone response to store in cache
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then(cache => {
+            cache.put(event.request, responseToCache);
+          });
+          return response;
+        })
+        .catch(() => {
+          // Fallback to cache if network fails
+          return caches.match(event.request);
+        })
+    );
+    return;
+  }
+  
+  // Cache-first strategy for other requests
   event.respondWith(
     caches.match(event.request)
       .then(cachedResponse => {
@@ -88,47 +118,112 @@ self.addEventListener('fetch', event => {
           })
           .catch(error => {
             console.log('[Service Worker] Fetch failed:', error);
-            // You could return a custom offline page here
+            // Return offline page
+            if (event.request.mode === 'navigate') {
+              return caches.match('/offline.html');
+            }
           });
       })
   );
 });
 
-// Handle push notifications (could be implemented in future)
+// Handle push notifications
 self.addEventListener('push', event => {
-  if (event.data) {
-    const notification = event.data.json();
+  if (!event.data) {
+    console.log('[Service Worker] Push received but no data');
+    return;
+  }
+  
+  try {
+    const data = event.data.json();
     
-    self.registration.showNotification('NeuroPulse', {
-      body: notification.message || 'New message from NeuroPulse',
+    const title = data.title || 'NeuroPulse';
+    const options = {
+      body: data.message || 'You have a new message',
       icon: '/icons/icon-192x192.svg',
       badge: '/icons/icon-192x192.svg',
       vibrate: [100, 50, 100],
       data: {
-        url: notification.url || '/'
-      }
-    });
+        url: data.url || '/',
+        timestamp: data.timestamp || Date.now(),
+        id: data.id || `notification-${Date.now()}`
+      },
+      actions: data.actions || [
+        {
+          action: 'view',
+          title: 'View'
+        },
+        {
+          action: 'close',
+          title: 'Close'
+        }
+      ],
+      // Enable these if needed
+      silent: data.silent || false,
+      renotify: data.renotify || false,
+      tag: data.tag || 'neuropulse-notification' // Tag for grouping notifications
+    };
+    
+    event.waitUntil(
+      self.registration.showNotification(title, options)
+    );
+  } catch (error) {
+    console.error('[Service Worker] Error showing notification:', error);
   }
 });
 
-// Handle notification clicks
+// Handle notification clicks with better navigation
 self.addEventListener('notificationclick', event => {
-  event.notification.close();
+  const notification = event.notification;
+  const action = event.action;
+  const notificationData = notification.data;
+  
+  notification.close();
+  
+  // Handle specific actions
+  if (action === 'close') {
+    return; // User chose to close, do nothing
+  }
+  
+  // Default action is to open the specified URL
+  const urlToOpen = notificationData.url || '/';
   
   event.waitUntil(
     clients.matchAll({type: 'window'})
       .then(windowClients => {
         // Check if there is already a window open
         for (const client of windowClients) {
-          if (client.url === event.notification.data.url && 'focus' in client) {
+          if (client.url === urlToOpen && 'focus' in client) {
+            // Send a message to the client
+            client.postMessage({
+              type: 'NOTIFICATION_CLICKED',
+              notificationId: notificationData.id,
+              timestamp: notificationData.timestamp
+            });
             return client.focus();
           }
         }
         
         // If not, open a new window
         if (clients.openWindow) {
-          return clients.openWindow(event.notification.data.url);
+          return clients.openWindow(urlToOpen).then(client => {
+            // We can't send a message here immediately because the window
+            // might not be fully loaded, but the app can check for notification
+            // parameters in the URL when it loads
+          });
         }
       })
   );
+});
+
+// Listen for message events (for communication with the client)
+self.addEventListener('message', event => {
+  // Handle messages from the client
+  if (event.data && event.data.type === 'CHECK_UPDATE') {
+    // Return the current version
+    event.ports[0].postMessage({
+      type: 'UPDATE_STATUS',
+      version: CACHE_NAME
+    });
+  }
 });

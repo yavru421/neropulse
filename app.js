@@ -893,5 +893,153 @@ class ChatApp {
     }
 }
 
+// Add this function to enable push notifications
+async function subscribeToPushNotifications() {
+    try {
+        // Check if service worker and push are supported
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+            console.log('Push notifications not supported');
+            return false;
+        }
+        
+        // Get the service worker registration
+        const registration = await navigator.serviceWorker.ready;
+        
+        // Check permission status
+        let permission = Notification.permission;
+        if (permission !== 'granted') {
+            permission = await Notification.requestPermission();
+        }
+        
+        if (permission !== 'granted') {
+            console.log('Notification permission denied');
+            return false;
+        }
+        
+        // Get existing subscription or create a new one
+        let subscription = await registration.pushManager.getSubscription();
+        
+        if (!subscription) {
+            // You'd need to replace this with your actual VAPID public key
+            const vapidPublicKey = 'YOUR_VAPID_PUBLIC_KEY';
+            const convertedKey = urlBase64ToUint8Array(vapidPublicKey);
+            
+            subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: convertedKey
+            });
+        }
+        
+        // Send subscription to your backend
+        await sendSubscriptionToServer(subscription);
+        
+        return true;
+    } catch (error) {
+        console.error('Error subscribing to push notifications:', error);
+        return false;
+    }
+}
+
+// Helper function to convert base64 to Uint8Array (for VAPID key)
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+        .replace(/-/g, '+')
+        .replace(/_/g, '/');
+    
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
+
+// Function to send subscription to your server
+async function sendSubscriptionToServer(subscription) {
+    try {
+        const response = await fetch('/api/subscribe', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(subscription)
+        });
+        return response.json();
+    } catch (error) {
+        console.error('Error sending subscription to server:', error);
+    }
+}
+
+// Function to check for app updates
+function checkForUpdates() {
+    // Check if service worker is supported
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then(registration => {
+            // Check for updates every hour
+            setInterval(() => {
+                registration.update();
+                console.log('Checking for updates...');
+            }, 60 * 60 * 1000); // Every hour
+        });
+        
+        // Listen for the controlling service worker changing
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (!refreshing) {
+                refreshing = true;
+                // Show update notification to user
+                if (confirm('New version available! Reload to update?')) {
+                    window.location.reload();
+                }
+            }
+        });
+    }
+}
+
+// Call this during app initialization
+function initializeAppUpdates() {
+    // Register button for push notification subscription
+    const notificationBtn = document.getElementById('enable-notifications');
+    if (notificationBtn) {
+        notificationBtn.addEventListener('click', subscribeToPushNotifications);
+    }
+    
+    // Initialize update checking
+    checkForUpdates();
+}
+
+// Listen for update messages from the service worker and show a notification in the UI
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', event => {
+        if (event.data && event.data.type === 'UPDATE_AVAILABLE') {
+            // Show a toast or dialog to the user
+            if (confirm('A new version of NeuroPulse is available! Reload to update?')) {
+                window.location.reload();
+            }
+        }
+    });
+}
+
+// Optionally, add a button in your UI to manually check for updates
+// <button id="check-updates">Check for Updates</button>
+document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('check-updates');
+    if (btn && 'serviceWorker' in navigator) {
+        btn.addEventListener('click', () => {
+            if (navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage({ type: 'CHECK_UPDATE' });
+            }
+        });
+    }
+});
+
+// Add this to your existing initialization code
+document.addEventListener('DOMContentLoaded', () => {
+    // ...existing code...
+    initializeAppUpdates();
+});
+
 // Initialize the app
 new ChatApp();
