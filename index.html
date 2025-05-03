@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NeuroPulse AI Chat</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css">
+    <meta name="theme-color" content="#6366f1" media="(prefers-color-scheme: light)"/>
+    <meta name="theme-color" content="#1e1e1e" media="(prefers-color-scheme: dark)"/>
+    <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://api.groq.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data:; font-src 'self' https://cdn.jsdelivr.net;">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <div class="logo-section">
+                <div class="pulse-icon"></div>
+                <h1>NeuroPulse</h1>
+                <span class="beta-tag">BETA</span>
+            </div>
+            <div class="controls">
+                <button id="settings-button" aria-label="Settings">
+                    <i class="ri-settings-3-line"></i>
+                </button>
+                <button id="theme-switch" aria-label="Toggle theme">
+                    <i class="ri-contrast-2-line"></i>
+                </button>
+                <button id="clear-chat" aria-label="Clear chat">
+                    <i class="ri-delete-bin-2-line"></i>
+                </button>
+            </div>
+        </header>
+        <main>
+            <div id="chat-container">
+                <div id="messages">
+                    <div class="welcome-message">
+                        <h2>Welcome to NeuroPulse</h2>
+                        <p>Experience the future of AI chat with blazing-fast responses powered by Groq.</p>
+                        <div class="features">
+                            <div class="feature">
+                                <i class="ri-flashlight-line"></i>
+                                <span>Lightning-fast responses</span>
+                            </div>
+                            <div class="feature">
+                                <i class="ri-brain-line"></i>
+                                <span>Advanced AI understanding</span>
+                            </div>
+                            <div class="feature">
+                                <i class="ri-code-line"></i>
+                                <span>Code highlighting</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="input-area">
+                    <div class="input-wrapper">
+                        <textarea id="user-input" 
+                                placeholder="Ask anything... (Shift+Enter for new line)"
+                                rows="1"
+                                data-gramm="false"></textarea>
+                        <button id="voice-input" aria-label="Voice input">
+                            <i class="ri-mic-line"></i>
+                        </button>
+                    </div>
+                    <button id="send-button" aria-label="Send message">
+                        <i class="ri-send-plane-fill"></i>
+                    </button>
+                </div>
+            </div>
+        </main>
+        <div id="status" class="offline">
+            <i class="ri-signal-wifi-error-line"></i>
+            <span>Offline</span>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/core.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/python.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/javascript.min.js"></script>
+    <script src="app.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js')
+                .then(registration => console.log('ServiceWorker registered'))
+                .catch(err => console.log('ServiceWorker registration failed: ', err));
+        }
+    </script>
+</body>
+</html>
