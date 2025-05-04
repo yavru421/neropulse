@@ -916,6 +916,46 @@ class ChatApp {
 
         URL.revokeObjectURL(url);
     }
+
+    async handleImageUpload(imageData) {
+        const loadingMessage = this.addMessage("Processing image...", "system");
+
+        try {
+            const response = await this.callVisionModelAPI(imageData);
+            this.messagesContainer.removeChild(loadingMessage);
+            this.addMessage("Image processed successfully!", "system");
+            this.addMessage(response, "assistant");
+        } catch (error) {
+            this.messagesContainer.removeChild(loadingMessage);
+            this.addMessage(`Error processing image: ${error.message}`, "system");
+        }
+    }
+
+    async callVisionModelAPI(imageData) {
+        const endpoint = "https://api.groq.com/vision/v1/analyze";
+
+        const payload = {
+            model: this.currentModel,
+            image: imageData
+        };
+
+        const response = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${this.apiKey}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error?.message || `API request failed with status ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data.result;
+    }
 }
 
 // Add this function to enable push notifications

@@ -163,6 +163,25 @@
                 .then(registration => console.log('ServiceWorker registered'))
                 .catch(err => console.log('ServiceWorker registration failed: ', err));
         }
+
+        document.getElementById('image-upload-btn').addEventListener('click', () => {
+            document.getElementById('image-upload').click();
+        });
+
+        document.getElementById('image-upload').addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                // Handle image analysis
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const imageData = e.target.result;
+                    // Send image data to the vision model for analysis
+                    // This part will be handled in app.js
+                    window.chatApp.handleImageUpload(imageData);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
     </script>
 </body>
 </html>
