@@ -921,21 +921,22 @@ class ChatApp {
         const loadingMessage = this.addMessage("Processing image...", "system");
 
         try {
-            const response = await this.callVisionModelAPI(imageData);
+            const selectedModel = localStorage.getItem('selectedVisionModel') || 'llama4-vision-1';
+            const response = await this.callVisionModelAPI(imageData, selectedModel);
             this.messagesContainer.removeChild(loadingMessage);
             this.addMessage("Image processed successfully!", "system");
-            this.addMessage(response, "assistant");
+            this.displayAnalyzedImageResults(response);
         } catch (error) {
             this.messagesContainer.removeChild(loadingMessage);
             this.addMessage(`Error processing image: ${error.message}`, "system");
         }
     }
 
-    async callVisionModelAPI(imageData) {
+    async callVisionModelAPI(imageData, model) {
         const endpoint = "https://api.groq.com/vision/v1/analyze";
 
         const payload = {
-            model: this.currentModel,
+            model: model,
             image: imageData
         };
 
@@ -955,6 +956,36 @@ class ChatApp {
 
         const data = await response.json();
         return data.result;
+    }
+
+    async handleMultipleImageUpload(imageData) {
+        const loadingMessage = this.addMessage("Processing image with multiple models...", "system");
+
+        try {
+            const models = ['llama4-vision-1', 'llama4-vision-2'];
+            const results = await Promise.all(models.map(model => this.callVisionModelAPI(imageData, model)));
+            this.messagesContainer.removeChild(loadingMessage);
+            this.addMessage("Image processed successfully with multiple models!", "system");
+            results.forEach((result, index) => {
+                this.addMessage(`Results from ${models[index]}:`, "system");
+                this.displayAnalyzedImageResults(result);
+            });
+        } catch (error) {
+            this.messagesContainer.removeChild(loadingMessage);
+            this.addMessage(`Error processing image with multiple models: ${error.message}`, "system");
+        }
+    }
+
+    displayAnalyzedImageResults(results) {
+        const resultMessage = `
+            <div class="analyzed-results">
+                <h3>Analyzed Image Results:</h3>
+                <ul>
+                    ${results.map(result => `<li>${result}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+        this.addMessage(resultMessage, "assistant");
     }
 }
 

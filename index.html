@@ -133,6 +133,10 @@
                             <button id="image-upload-btn" aria-label="Upload image">
                                 <i class="ri-image-line"></i>
                             </button>
+                            <select id="vision-model-selector" class="model-selector">
+                                <option value="llama4-vision-1">Llama4 Vision 1</option>
+                                <option value="llama4-vision-2">Llama4 Vision 2</option>
+                            </select>
                         </div>
                         <button id="send-button" aria-label="Send message">
                             <i class="ri-send-plane-fill"></i>
@@ -181,6 +185,11 @@
                 };
                 reader.readAsDataURL(file);
             }
+        });
+
+        document.getElementById('vision-model-selector').addEventListener('change', (event) => {
+            const selectedModel = event.target.value;
+            localStorage.setItem('selectedVisionModel', selectedModel);
         });
     </script>
 </body>
