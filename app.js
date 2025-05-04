@@ -412,7 +412,7 @@ class ChatApp {
             stream: true
         };
 
-        const response = await fetch(endpoint, {
+        const response = await this.retryFetch(endpoint, {
             method: "POST",
             headers: {
                 "Authorization": `Bearer ${this.apiKey}`,
@@ -502,7 +502,7 @@ class ChatApp {
             max_tokens: isAutocomplete ? 150 : 2048
         };
 
-        const response = await fetch(endpoint, {
+        const response = await this.retryFetch(endpoint, {
             method: "POST",
             headers: {
                 "Authorization": `Bearer ${this.apiKey}`,
@@ -518,6 +518,22 @@ class ChatApp {
 
         const data = await response.json();
         return data.choices[0].message.content;
+    }
+
+    async retryFetch(url, options, retries = 3, delay = 1000) {
+        for (let i = 0; i < retries; i++) {
+            try {
+                const response = await fetch(url, options);
+                if (response.ok) {
+                    return response;
+                }
+                console.error(`Attempt ${i + 1} failed: ${response.statusText}`);
+            } catch (error) {
+                console.error(`Attempt ${i + 1} failed: ${error.message}`);
+            }
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+        throw new Error(`Failed to fetch ${url} after ${retries} attempts`);
     }
 
     addMessage(content, role) {
