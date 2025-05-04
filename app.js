@@ -27,7 +27,9 @@ class ChatApp {
             "llama-3.3-70b-versatile": "Llama 3.3 70B (Recommended)",
             "llama-3.3-8b-versatile": "Llama 3.3 8B (Faster)",
             "gemma-7b-it": "Gemma 7B (Efficient)",
-            "mixtral-8x7b-32768": "Mixtral 8x7B (Long context)"
+            "mixtral-8x7b-32768": "Mixtral 8x7B (Long context)",
+            "llama4-vision-1": "Llama4 Vision 1",
+            "llama4-vision-2": "Llama4 Vision 2"
         };
         this.currentModel = localStorage.getItem('selectedModel') || "llama-3.3-70b-versatile";
 
@@ -643,25 +645,48 @@ class ChatApp {
         localStorage.setItem('theme', newTheme);
     }
 
-    initializeModelSelector() {
+    async initializeModelSelector() {
         const modelSelector = document.getElementById('model-selector');
         if (modelSelector) {
             modelSelector.innerHTML = '';
 
-            Object.entries(this.modelOptions).forEach(([id, name]) => {
-                const option = document.createElement('option');
-                option.value = id;
-                option.textContent = name;
-                modelSelector.appendChild(option);
-            });
+            try {
+                const response = await fetch('https://api.groq.com/models', {
+                    headers: {
+                        "Authorization": `Bearer ${this.apiKey}`
+                    }
+                });
 
-            modelSelector.value = this.currentModel;
+                if (!response.ok) {
+                    throw new Error('Failed to fetch models from Groq API');
+                }
 
-            modelSelector.addEventListener('change', (e) => {
-                this.currentModel = e.target.value;
-                localStorage.setItem('selectedModel', this.currentModel);
-                this.addMessage(`Model changed to ${this.modelOptions[this.currentModel]}`, 'system');
-            });
+                const models = await response.json();
+                models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = model.name;
+                    modelSelector.appendChild(option);
+                });
+
+                modelSelector.value = this.currentModel;
+
+                modelSelector.addEventListener('change', (e) => {
+                    this.currentModel = e.target.value;
+                    localStorage.setItem('selectedModel', this.currentModel);
+                    this.addMessage(`Model changed to ${this.modelOptions[this.currentModel]}`, 'system');
+                });
+            } catch (error) {
+                console.error('Error fetching models:', error);
+                Object.entries(this.modelOptions).forEach(([id, name]) => {
+                    const option = document.createElement('option');
+                    option.value = id;
+                    option.textContent = name;
+                    modelSelector.appendChild(option);
+                });
+
+                modelSelector.value = this.currentModel;
+            }
         }
     }
 
