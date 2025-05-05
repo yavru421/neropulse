@@ -19,7 +19,15 @@
       <label class="block mb-2 font-semibold">Paste your Groq/OpenAI API Key:</label>
       <input id="apiKey" type="password" class="w-full p-2 rounded bg-gray-700 text-gray-100 mb-4" placeholder="groq-..." autocomplete="off">
       <label class="block mb-2 font-semibold">Choose Groq Model:</label>
-      <select id="modelSelect" class="w-full p-2 rounded bg-gray-700 text-gray-100 mb-4"></select>
+      <select id="modelSelect" class="w-full p-2 rounded bg-gray-700 text-gray-100 mb-4">
+        <option value="mixtral-8x7b-32768">mixtral-8x7b-32768</option>
+        <option value="llama3-8b-8192">llama3-8b-8192</option>
+        <option value="llama3-70b-8192">llama3-70b-8192</option>
+        <option value="gemma-7b-it">gemma-7b-it</option>
+        <option value="command-r-plus">command-r-plus</option>
+        <option value="command-r">command-r</option>
+        <option value="command-r-beta" selected>command-r-beta</option>
+      </select>
       <label class="block mb-2 font-semibold">Paste or upload your document:</label>
       <textarea id="docInput" rows="8" class="w-full p-2 rounded bg-gray-700 text-gray-100 mb-2" placeholder="Paste text here..."></textarea>
       <input id="fileInput" type="file" accept=".txt,.md,.csv,.json,.log,.pdf" class="mb-4">
@@ -73,41 +81,6 @@
       }
     });
 
-    // On page load, fetch Groq models if API key is present
-    async function fetchGroqModels(apiKey) {
-      const output = document.getElementById('output');
-      const modelSelect = document.getElementById('modelSelect');
-      modelSelect.innerHTML = '<option>Loading models...</option>';
-      try {
-        const res = await fetch('https://api.groq.com/openai/v1/models', {
-          headers: { 'Authorization': `Bearer ${apiKey}` }
-        });
-        if (!res.ok) throw new Error('Failed to fetch models: ' + res.status);
-        const data = await res.json();
-        if (!data.data || !Array.isArray(data.data)) throw new Error('No models found');
-        modelSelect.innerHTML = '';
-        data.data.forEach(model => {
-          const opt = document.createElement('option');
-          opt.value = model.id;
-          opt.textContent = model.id;
-          modelSelect.appendChild(opt);
-        });
-      } catch (e) {
-        modelSelect.innerHTML = '<option>Error loading models</option>';
-        output.innerHTML = '<span class="text-red-400">' + e.message + '</span>';
-      }
-    }
-    // When API key changes, fetch models
-    document.getElementById('apiKey').addEventListener('change', function() {
-      const apiKey = this.value.trim();
-      if (apiKey.startsWith('groq-')) fetchGroqModels(apiKey);
-    });
-    // On page load, if API key is prefilled, fetch models
-    window.addEventListener('DOMContentLoaded', function() {
-      const apiKey = document.getElementById('apiKey').value.trim();
-      if (apiKey.startsWith('groq-')) fetchGroqModels(apiKey);
-    });
-
     // Main analysis handler
     document.getElementById('analyzeBtn').onclick = async function() {
       const apiKey = document.getElementById('apiKey').value.trim();
@@ -126,7 +99,7 @@
       }
       output.innerHTML = '<span class="text-blue-400">Analyzing, please wait...</span>';
       if (apiKey.startsWith('groq-')) {
-        const model = document.getElementById('modelSelect').value || 'llama3-8b-8192';
+        const model = document.getElementById('modelSelect').value || 'command-r-beta';
         apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
         headers = {
           'Content-Type': 'application/json',
