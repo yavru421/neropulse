@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AcademicDocAnalyzer | Document Analysis & RAG System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .document-preview {
+            height: 500px;
+            overflow-y: auto;
+            border: 1px solid #e5e7eb;
+            background-color: #f9fafb;
+        }
+        .analysis-result {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .progress-bar {
+            transition: width 0.3s ease;
+        }
+        .sidebar-item {
+            transition: all 0.2s ease;
+        }
+        .sidebar-item:hover {
+            background-color: rgba(59, 130, 246, 0.1);
+        }
+        .sidebar-item.active {
+            background-color: rgba(59, 130, 246, 0.2);
+            border-left: 4px solid #3b82f6;
+        }
+        .citation {
+            background-color: rgba(234, 179, 8, 0.2);
+            padding: 2px 4px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .plagiarism-highlight {
+            background-color: rgba(239, 68, 68, 0.3);
+            cursor: pointer;
+        }
+        .writing-suggestion {
+            background-color: rgba(34, 197, 94, 0.2);
+            border-bottom: 1px dashed #22c55e;
+            cursor: pointer;
+        }
+        .dark .document-preview {
+            background-color: #1f2937;
+            border-color: #4b5563;
+        }
+        .dark .citation {
+            background-color: rgba(234, 179, 8, 0.4);
+        }
+        .dark .plagiarism-highlight {
+            background-color: rgba(239, 68, 68, 0.5);
+        }
+        .dark .writing-suggestion {
+            background-color: rgba(34, 197, 94, 0.4);
+        }
+        .spinner {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .toast {
+            animation: fadeIn 0.3s, fadeOut 0.3s 2.7s;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    <!-- API Key Modal -->
+    <div id="apiKeyModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">Enter Groq API Key</h3>
+                <button id="closeApiKeyModal" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="mb-4">
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                    This application requires a Groq API key to analyze documents. 
+                    Get your key from <a href="https://console.groq.com/" target="_blank" class="text-blue-600 dark:text-blue-400">Groq Console</a>.
+                </p>
+                <input type="password" id="apiKeyInput" placeholder="sk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" 
+                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700">
+            </div>
+            <div class="flex justify-end space-x-3">
+                <button id="saveApiKey" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                    Save Key
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-gray-800 text-white px-4 py-2 rounded-md shadow-lg hidden toast">
+        <div class="flex items-center">
+            <span id="toastMessage"></span>
+        </div>
+    </div>
+
+    <div class="flex h-screen overflow-hidden">
+        <!-- Sidebar -->
+        <div class="hidden md:flex md:flex-shrink-0">
+            <div class="flex flex-col w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
+                <div class="h-16 flex items-center px-4 border-b border-gray-200 dark:border-gray-700">
+                    <h1 class="text-xl font-bold text-blue-600 dark:text-blue-400">AcademicDocAnalyzer</h1>
+                </div>
+                <div class="flex flex-col flex-grow overflow-y-auto">
+                    <div class="px-4 py-4">
+                        <button id="uploadBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg flex items-center justify-center">
+                            <i class="fas fa-upload mr-2"></i> Upload Document
+                        </button>
+                        <input type="file" id="fileInput" class="hidden" accept=".pdf,.docx,.txt,.md">
+                    </div>
+                    
+                    <div class="px-4">
+                        <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Recent Documents</h3>
+                        <div id="recentDocuments" class="space-y-1">
+                            <!-- Dynamically populated -->
+                        </div>
+                    </div>
+                    
+                    <div class="px-4 mt-6">
+                        <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Analysis Tools</h3>
+                        <div class="space-y-1">
+                            <div class="sidebar-item p-2 rounded cursor-pointer" data-tool="semantic-search">
+                                <div class="flex items-center">
+                                    <i class="fas fa-search mr-2 text-purple-500"></i>
+                                    <span>Semantic Search</span>
+                                </div>
+                            </div>
+                            <div class="sidebar-item p-2 rounded cursor-pointer" data-tool="plagiarism-check">
+                                <div class="flex items-center">
+                                    <i class="fas fa-clipboard-check mr-2 text-green-500"></i>
+                                    <span>Plagiarism Check</span>
+                                </div>
+                            </div>
+                            <div class="sidebar-item p-2 rounded cursor-pointer" data-tool="citation-analysis">
+                                <div class="flex items-center">
+                                    <i class="fas fa-book mr-2 text-yellow-500"></i>
+                                    <span>Citation Analysis</span>
+                                </div>
+                            </div>
+                            <div class="sidebar-item p-2 rounded cursor-pointer" data-tool="writing-quality">
+                                <div class="flex items-center">
+                                    <i class="fas fa-chart-line mr-2 text-blue-500"></i>
+                                    <span>Writing Quality</span>
+                                </div>
+                            </div>
+                            <div class="sidebar-item p-2 rounded cursor-pointer" data-tool="grade-assessment">
+                                <div class="flex items-center">
+                                    <i class="fas fa-graduation-cap mr-2 text-indigo-500"></i>
+                                    <span>Grade Assessment</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="px-4 mt-6">
+                        <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Instructor Tools</h3>
+                        <div class="space-y-1">
+                            <div class="sidebar-item p-2 rounded cursor-pointer" data-tool="batch-processing">
+                                <div class="flex items-center">
+                                    <i class="fas fa-users mr-2 text-teal-500"></i>
+                                    <span>Batch Processing</span>
+                                </div>
+                            </div>
+                            <div class="sidebar-item p-2 rounded cursor-pointer" data-tool="rubric-builder">
+                                <div class="flex items-center">
+                                    <i class="fas fa-clipboard-list mr-2 text-orange-500"></i>
+                                    <span>Rubric Builder</span>
+                                </div>
+                            </div>
+                            <div class="sidebar-item p-2 rounded cursor-pointer" data-tool="class-analytics">
+                                <div class="flex items-center">
+                                    <i class="fas fa-chart-bar mr-2 text-pink-500"></i>
+                                    <span>Class Analytics</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="p-4 border-t border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <img class="h-8 w-8 rounded-full" src="https://ui-avatars.com/api/?name=User+Name" alt="User profile">
+                        </div>
+                        <div class="ml-3">
+                            <div id="userName" class="text-sm font-medium">User Name</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">Role</div>
+                        </div>
+                        <button id="settingsBtn" class="ml-auto text-gray-400 hover:text-gray-500">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main content -->
+        <div class="flex flex-col flex-1 overflow-hidden">
+            <!-- Top navigation -->
+            <div class="h-16 flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                <div class="flex items-center">
+                    <button id="sidebarToggle" class="md:hidden mr-4 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h2 id="documentTitle" class="text-lg font-semibold">Document Analysis Dashboard</h2>
+                </div>
+                
+                <div class="flex items-center space-x-4">
+                    <div class="relative hidden md:block">
+                        <input type="text" placeholder="Search documents..." class="pl-8 pr-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+                    </div>
+                    <button id="themeToggle" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
+                        <i class="fas fa-moon dark:hidden"></i>
+                        <i class="fas fa-sun hidden dark:inline"></i>
+                    </button>
+                    <button id="notificationsBtn" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 relative">
+                        <i class="fas fa-bell"></i>
+                        <span id="notificationBadge" class="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500 hidden"></span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Main content area -->
+            <div class="flex-1 overflow-auto p-4">
+                <div id="emptyState" class="flex flex-col items-center justify-center h-full text-center py-12 px-4">
+                    <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-900 mb-4">
+                        <i class="fas fa-file-alt text-blue-600 dark:text-blue-400"></i>
+                    </div>
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-1">No document selected</h3>
+                    <p class="text-gray-500 dark:text-gray-400 mb-6">Upload a document to begin analysis or select from your recent documents</p>
+                    <button id="emptyUploadBtn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        <i class="fas fa-upload mr-2"></i> Upload Document
+                    </button>
+                </div>
+
+                <div id="contentArea" class="hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Document preview and analysis -->
+                        <div class="lg:col-span-2 space-y-6">
+                            <!-- Document processing status -->
+                            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h3 class="font-medium">Processing Status</h3>
+                                    <span id="processingStatus" class="text-sm text-green-600 dark:text-green-400">Completed</span>
+                                </div>
+                                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                                    <div id="progressBar" class="progress-bar bg-green-600 h-2.5 rounded-full" style="width: 0%"></div>
+                                </div>
+                                <div class="grid grid-cols-4 gap-2 mt-4 text-xs text-center">
+                                    <div id="uploadStep" class="p-2 rounded bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
+                                        <div>Upload</div>
+                                        <div class="font-semibold">0%</div>
+                                    </div>
+                                    <div id="parsingStep" class="p-2 rounded bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
+                                        <div>Parsing</div>
+                                        <div class="font-semibold">0%</div>
+                                    </div>
+                                    <div id="analysisStep" class="p-2 rounded bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
+                                        <div>Analysis</div>
+                                        <div class="font-semibold">0%</div>
+                                    </div>
+                                    <div id="resultsStep" class="p-2 rounded bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
+                                        <div>Results</div>
+                                        <div class="font-semibold">0%</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Document preview -->
+                            <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+                                <div class="border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex justify-between items-center">
+                                    <h3 class="font-medium">Document Preview</h3>
+                                    <div class="flex space-x-2">
+                                        <button id="zoomInBtn" class="p-1 text-gray-500 hover:text-blue-600 dark:hover:text-blue-400">
+                                            <i class="fas fa-search-plus"></i>
+                                        </button>
+                                        <button id="downloadBtn" class="p-1 text-gray-500 hover:text-blue-600 dark:hover:text-blue-400">
+                                            <i class="fas fa-download"></i>
+                                        </button>
+                                        <button id="printBtn" class="p-1 text-gray-500 hover:text-blue-600 dark:hover:text-blue-400">
+                                            <i class="fas fa-print"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="documentPreview" class="document-preview p-4">
+                                    <!-- Dynamically populated -->
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Analysis results -->
+                        <div class="space-y-6">
+                            <!-- Document metadata -->
+                            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                                <h3 class="font-medium mb-3">Document Information</h3>
+                                <div id="documentMetadata" class="space-y-3">
+                                    <!-- Dynamically populated -->
+                                </div>
+                            </div>
+                            
+                            <!-- Analysis summary -->
+                            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                                <h3 class="font-medium mb-3">Analysis Summary</h3>
+                                <div id="analysisSummary" class="space-y-4">
+                                    <!-- Dynamically populated -->
+                                </div>
+                            </div>
+                            
+                            <!-- Detailed analysis -->
+                            <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+                                <div class="border-b border-gray-200 dark:border-gray-700 px-4 py-3">
+                                    <h3 class="font-medium">Detailed Analysis</h3>
+                                </div>
+                                <div id="detailedAnalysis" class="analysis-result p-4">
+                                    <!-- Dynamically populated -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile sidebar (hidden by default) -->
+    <div id="mobileSidebar" class="fixed inset-0 z-40 hidden">
+        <div class="fixed inset-0 bg-gray-600 bg-opacity-75" aria-hidden="true"></div>
+        <div class="relative flex flex-col w-full max-w-xs bg-white dark:bg-gray-800 h-full">
+            <div class="h-16 flex items-center px-4 border-b border-gray-200 dark:border-gray-700">
+                <h1 class="text-xl font-bold text-blue-600 dark:text-blue-400">AcademicDocAnalyzer</h1>
+                <button id="closeSidebar" class="ml-auto text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto py-4">
+                <div class="px-4">
+                    <button id="mobileUploadBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-upload mr-2"></i> Upload Document
+                    </button>
+                </div>
+                
+                <div class="px-4 mb-6">
+                    <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Recent Documents</h3>
+                    <div id="mobileRecentDocuments" class="space-y-2">
+                        <!-- Dynamically populated -->
+                    </div>
+                </div>
+                
+                <div class="px-4 mb-6">
+                    <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Analysis Tools</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer text-center" data-tool="semantic-search">
+                            <i class="fas fa-search block mx-auto mb-1 text-purple-500"></i>
+                            <span class="text-sm">Search</span>
+                        </div>
+                        <div class="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer text-center" data-tool="plagiarism-check">
+                            <i class="fas fa-clipboard-check block mx-auto mb-1 text-green-500"></i>
+                            <span class="text-sm">Plagiarism</span>
+                        </div>
+                        <div class="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer text-center" data-tool="citation-analysis">
+                            <i class="fas fa-book block mx-auto mb-1 text-yellow-500"></i>
+                            <span class="text-sm">Citations</span>
+                        </div>
+                        <div class="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer text-center" data-tool="writing-quality">
+                            <i class="fas fa-chart-line block mx-auto mb-1 text-blue-500"></i>
+                            <span class="text-sm">Writing</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State management
+        const state = {
+            currentDocument: null,
+            documents: [],
+            apiKey: localStorage.getItem('groqApiKey') || '',
+            processingState: 'idle',
+            fontSize: 16,
+            activeTool: null
+        };
+
+        // DOM Elements
+        const elements = {
+            apiKeyModal: document.getElementById('apiKeyModal'),
+            apiKeyInput: document.getElementById('apiKeyInput'),
+            saveApiKey: document.getElementById('saveApiKey'),
+            closeApiKeyModal: document.getElementById('closeApiKeyModal'),
+            toast: document.getElementById('toast'),
+            toastMessage: document.getElementById('toastMessage'),
+            sidebarToggle: document.getElementById('sidebarToggle'),
+            closeSidebar: document.getElementById('closeSidebar'),
+            mobileSidebar: document.getElementById('mobileSidebar'),
+            themeToggle: document.getElementById('themeToggle'),
+            uploadBtn: document.getElementById('uploadBtn'),
+            emptyUploadBtn: document.getElementById('emptyUploadBtn'),
+            mobileUploadBtn: document.getElementById('mobileUploadBtn'),
+            fileInput: document.getElementById('fileInput'),
+            emptyState: document.getElementById('emptyState'),
+            contentArea: document.getElementById('contentArea'),
+            documentTitle: document.getElementById('documentTitle'),
+            documentPreview: document.getElementById('documentPreview'),
+            documentMetadata: document.getElementById('documentMetadata'),
+            analysisSummary: document.getElementById('analysisSummary'),
+            detailedAnalysis: document.getElementById('detailedAnalysis'),
+            recentDocuments: document.getElementById('recentDocuments'),
+            mobileRecentDocuments: document.getElementById('mobileRecentDocuments'),
+            processingStatus: document.getElementById('processingStatus'),
+            progressBar: document.getElementById('progressBar'),
+            uploadStep: document.getElementById('uploadStep'),
+            parsingStep: document.getElementById('parsingStep'),
+            analysisStep: document.getElementById('analysisStep'),
+            resultsStep: document.getElementById('resultsStep'),
+            zoomInBtn: document.getElementById('zoomInBtn'),
+            zoomOutBtn: document.getElementById('zoomOutBtn'),
+            downloadBtn: document.getElementById('downloadBtn'),
+            printBtn: document.getElementById('printBtn'),
+            settingsBtn: document.getElementById('settingsBtn'),
+            notificationsBtn: document.getElementById('notificationsBtn'),
+            notificationBadge: document.getElementById('notificationBadge'),
+            userName: document.getElementById('userName')
+        };
+
+        // Initialize the application
+        function init() {
+            // Check for API key on startup
+            if (!state.apiKey) {
+                showApiKeyModal();
+            }
+
+            // Load sample documents for demo
+            loadSampleDocuments();
+
+            // Set up event listeners
+            setupEventListeners();
+
+            // Check for saved dark mode preference
+            if (localStorage.getItem('darkMode') === 'true') {
+                document.documentElement.classList.add('dark');
+            }
+
+            // Set user name
+            elements.userName.textContent = localStorage.getItem('userName') || 'User Name';
+        }
+
+        // Set up all event listeners
+        function setupEventListeners() {
+            // API Key Modal
+            elements.saveApiKey.addEventListener('click', saveApiKey);
+            elements.closeApiKeyModal.addEventListener('click', () => elements.apiKeyModal.classList.add('hidden'));
+            
+            // Sidebar and mobile menu
+            elements.sidebarToggle.addEventListener('click', () => elements.mobileSidebar.classList.remove('hidden'));
+            elements.closeSidebar.addEventListener('click', () => elements.mobileSidebar.classList.add('hidden'));
+            
+            // Theme toggle
+            elements.themeToggle.addEventListener('click', toggleDarkMode);
+            
+            // File upload
+            elements.uploadBtn.addEventListener('click', () => elements.fileInput.click());
+            elements.emptyUploadBtn.addEventListener('click', () => elements.fileInput.click());
+            elements.mobileUploadBtn.addEventListener('click', () => elements.fileInput.click());
+            elements.fileInput.addEventListener('change', handleFileUpload);
+            
+            // Document tools
+            elements.zoomInBtn.addEventListener('click', () => {
+                state.fontSize += 1;
+                elements.documentPreview.style.fontSize = `${state.fontSize}px`;
+            });
+            elements.downloadBtn.addEventListener('click', downloadDocument);
+            elements.printBtn.addEventListener('click', () => window.print());
+            elements.settingsBtn.addEventListener('click', showApiKeyModal);
+            
+            // Analysis tools
+            document.querySelectorAll('[data-tool]').forEach(button => {
+                button.addEventListener('click', () => {
+                    const tool = button.getAttribute('data-tool');
+                    activateTool(tool);
+                });
+            });
+        }
+
+        // Show API key modal
+        function showApiKeyModal() {
+            elements.apiKeyInput.value = state.apiKey;
+            elements.apiKeyModal.classList.remove('hidden');
+        }
+
+        // Save API key
+        function saveApiKey() {
+            const apiKey = elements.apiKeyInput.value.trim();
+            if (apiKey) {
+                state.apiKey = apiKey;
+                localStorage.setItem('groqApiKey', apiKey);
+                elements.apiKeyModal.classList.add('hidden');
+                showToast('API key saved successfully');
+            } else {
+                showToast('Please enter a valid API key', 'error');
+            }
+        }
+
+        // Toggle dark mode
+        function toggleDarkMode() {
+            document.documentElement.classList.toggle('dark');
+            localStorage.setItem('darkMode', document.documentElement.classList.contains('dark'));
+        }
+
+        // Show toast notification
+        function showToast(message, type = 'success') {
+            elements.toastMessage.textContent = message;
+            elements.toast.className = `fixed bottom-4 right-4 px-4 py-2 rounded-md shadow-lg toast ${type === 'error' ? 'bg-red-600' : 'bg-gray-800'} text-white`;
+            elements.toast.classList.remove('hidden');
+            
+            setTimeout(() => {
+                elements.toast.classList.add('hidden');
+            }, 3000);
+        }
+
+        // Load sample documents for demo
+        function loadSampleDocuments() {
+            state.documents = [
+                {
+                    id: 'doc1',
+                    name: 'Research_Paper.docx',
+                    type: 'docx',
+                    date: new Date(Date.now() - 2 * 60 * 60 * 1000),
+                    content: `# The Impact of Machine Learning on Academic Research\n\nBy: John Doe, University of Technology\n\n## Abstract\n\nThis paper explores the transformative effects of machine learning (ML) techniques on academic research across various disciplines. We analyze (Smith et al., 2021) the adoption patterns, benefits, and challenges faced by researchers implementing ML in their work. Our findings suggest that ML has significantly accelerated data analysis processes while introducing new methodological considerations (Johnson, 2020).\n\n## 1. Introduction\n\nThe rapid advancement of machine learning algorithms has created new opportunities for academic research, particularly in fields dealing with large datasets. Traditional statistical methods often struggle with the volume and complexity of modern research data (Lee, 2019).\n\nML approaches offer several advantages:\n\n- Automated pattern recognition in high-dimensional data\n- Ability to process unstructured data (text, images, etc.)\n- Improved predictive accuracy for certain problem types\n\n## 2. Methodology\n\nWe conducted a systematic literature review of 150 peer-reviewed articles published between 2015-2022 that explicitly mentioned using ML techniques in academic research. Our analysis focused on:\n\n1. Research discipline distribution\n2. Specific ML techniques employed\n3. Reported benefits and challenges\n4. Impact on research outcomes\n\nFor text analysis components, we implemented a BERT-based model fine-tuned on academic texts (Chen et al., 2022).\n\n## 3. Results\n\nOur analysis revealed several key findings:\n\n| Discipline       | ML Adoption | Primary Use         |\n|------------------|-------------|---------------------|\n| Computer Science | 87%         | Algorithm development|\n| Biology          | 65%         | Genomic analysis    |\n| Social Sciences  | 42%         | Text analysis       |`,
+                    metadata: {
+                        author: 'John Doe',
+                        institution: 'University of Technology',
+                        wordCount: 2847,
+                        citations: 12,
+                        lastAnalyzed: new Date()
+                    },
+                    analysis: {
+                        academicQuality: 8.2,
+                        writingQuality: 7.5,
+                        originality: 9.1,
+                        citationQuality: 8.7,
+                        readability: 8.0,
+                        plagiarism: {
+                            percentage: 3,
+                            matches: [
+                                {
+                                    text: 'has created new opportunities for academic research',
+                                    source: 'Similar text found in Lee (2019)'
+                                },
+                                {
+                                    text: 'BERT-based model fine-tuned on academic texts',
+                                    source: 'Similar methodology described in Chen (2022)'
+                                }
+                            ]
+                        },
+                        suggestions: [
+                            {
+                                text: 'various disciplines',
+                                suggestion: 'Consider using a more specific term than "various disciplines" to strengthen your abstract'
+                            },
+                            {
+                                text: 'Improved predictive accuracy for certain problem types',
+                                suggestion: 'This point could be expanded with an example'
+                            }
+                        ],
+                        citations: [
+                            {
+                                key: 'smith2021',
+                                text: 'Smith et al., 2021'
+                            },
+                            {
+                                key: 'johnson2020',
+                                text: 'Johnson, 2020'
+                            },
+                            {
+                                key: 'lee2019',
+                                text: 'Lee, 2019'
+                            },
+                            {
+                                key: 'chen2022',
+                                text: 'Chen et al., 2022'
+                            }
+                        ]
+                    }
+                },
+                {
+                    id: 'doc2',
+                    name: 'Thesis_Chapter1.pdf',
+                    type: 'pdf',
+                    date: new Date(Date.now() - 24 * 60 * 60 * 1000),
+                    content: '# Thesis Chapter 1: Introduction\n\n## Research Background\n\nThis thesis examines the application of deep learning techniques in medical image analysis, specifically focusing on MRI scans for early detection of neurological disorders. The past decade has seen remarkable progress in both medical imaging technology and artificial intelligence, creating new opportunities for diagnostic support systems (Zhang et al., 2020).\n\n## Problem Statement\n\nDespite these advances, several challenges remain:\n\n1. Limited availability of annotated medical imaging datasets\n2. Class imbalance in neurological disorder cases\n3. Need for explainable AI in medical diagnostics\n4. Integration with existing clinical workflows\n\n## Research Objectives\n\nThe primary objectives of this research are:\n\n- To develop a robust deep learning model for MRI analysis\n- To address the class imbalance problem through novel augmentation techniques\n- To create an explainability framework for model decisions\n- To evaluate clinical applicability through collaboration with medical professionals',
+                    metadata: {
+                        author: 'Jane Smith',
+                        institution: 'Medical University',
+                        wordCount: 1250,
+                        citations: 8,
+                        lastAnalyzed: new Date(Date.now() - 6 * 60 * 60 * 1000)
+                    }
+                },
+                {
+                    id: 'doc3',
+                    name: 'Literature_Review.txt',
+                    type: 'txt',
+                    date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+                    content: 'Literature Review: Natural Language Processing in Education\n\nThis review covers 45 papers published between 2010-2022 on the application of NLP in educational settings. Key themes identified include:\n\n1. Automated essay scoring\n2. Plagiarism detection\n3. Intelligent tutoring systems\n4. Learning analytics\n\n## Automated Essay Scoring\n\nThe most mature application of NLP in education, with commercial systems now achieving human-level performance on standardized assessments (Dikli, 2011; Shermis & Burstein, 2016). Recent advances in transformer models (Devlin et al., 2019) have further improved accuracy, particularly for non-native English writing.\n\n## Challenges\n\nDespite progress, several limitations remain:\n\n- Bias in training data affecting fairness\n- Difficulty assessing creativity and originality\n- Limited adoption in formative assessment contexts\n- Need for better explainability to gain educator trust',
+                    metadata: {
+                        author: 'Alex Johnson',
+                        institution: 'Education Institute',
+                        wordCount: 980,
+                        citations: 15,
+                        lastAnalyzed: new Date(Date.now() - 12 * 60 * 60 * 1000)
+                    }
+                }
+            ];
+
+            renderRecentDocuments();
+        }
+
+        // Render recent documents list
+        function renderRecentDocuments() {
+            elements.recentDocuments.innerHTML = '';
+            elements.mobileRecentDocuments.innerHTML = '';
+            
+            state.documents.forEach(doc => {
+                const iconClass = doc.type === 'pdf' ? 'fa-file-pdf text-red-500' : 
+                                 doc.type === 'docx' ? 'fa-file-word text-blue-500' : 
+                                 'fa-file-alt text-gray-500';
+                
+                const formattedDate = formatDate(doc.date);
+                
+                // Desktop version
+                const desktopItem = document.createElement('div');
+                desktopItem.className = `sidebar-item p-2 rounded cursor-pointer ${state.currentDocument?.id === doc.id ? 'active' : ''}`;
+                desktopItem.innerHTML = `
+                    <div class="flex items-center">
+                        <i class="fas ${iconClass} mr-2"></i>
+                        <span class="truncate">${doc.name}</span>
+                    </div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">Last analyzed: ${formattedDate}</div>
+                `;
+                desktopItem.addEventListener('click', () => loadDocument(doc.id));
+                elements.recentDocuments.appendChild(desktopItem);
+                
+                // Mobile version
+                const mobileItem = document.createElement('div');
+                mobileItem.className = `p-2 rounded ${state.currentDocument?.id === doc.id ? 'bg-blue-50 dark:bg-blue-900' : 'hover:bg-gray-100 dark:hover:bg-gray-700'} cursor-pointer`;
+                mobileItem.innerHTML = `
+                    <div class="flex items-center">
+                        <i class="fas ${iconClass} mr-2"></i>
+                        <span class="truncate">${doc.name}</span>
+                    </div>
+                `;
+                mobileItem.addEventListener('click', () => {
+                    loadDocument(doc.id);
+                    elements.mobileSidebar.classList.add('hidden');
+                });
+                elements.mobileRecentDocuments.appendChild(mobileItem);
+            });
+        }
+
+        // Format date for display
+        function formatDate(date) {
+            const now = new Date();
+            const diffInHours = Math.floor((now - date) / (1000 * 60 * 60));
+            
+            if (diffInHours < 1) {
+                return 'Less than an hour ago';
+            } else if (diffInHours < 24) {
+                return `${diffInHours} hours ago`;
+            } else {
+                const diffInDays = Math.floor(diffInHours / 24);
+                return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
+            }
+        }
+
+        // Handle file upload
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            // Reset file input
+            elements.fileInput.value = '';
+            
+            // Check file type
+            const fileType = file.name.split('.').pop().toLowerCase();
+            if (!['pdf', 'docx', 'txt', 'md'].includes(fileType)) {
+                showToast('Please upload a PDF, DOCX, or TXT file', 'error');
+                return;
+            }
+            
+            // Check file size (max 5MB for demo)
+            if (file.size > 5 * 1024 * 1024) {
+                showToast('File size exceeds 5MB limit', 'error');
+                return;
+            }
+            
+            // Show processing UI
+            startProcessing();
+            
+            // Simulate file processing (in a real app, you would upload to a server)
+            setTimeout(() => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const content = e.target.result;
+                    
+                    // Create new document
+                    const newDoc = {
+                        id: 'doc' + Date.now(),
+                        name: file.name,
+                        type: fileType,
+                        date: new Date(),
+                        content: content,
+                        metadata: {
+                            author: 'Unknown Author',
+                            institution: 'Unknown Institution',
+                            wordCount: Math.floor(content.length / 5), // Approximate word count
+                            citations: 0,
+                            lastAnalyzed: new Date()
+                        }
+                    };
+                    
+                    // Add to documents list
+                    state.documents.unshift(newDoc);
+                    state.currentDocument = newDoc;
+                    
+                    // Process document with Groq API
+                    processDocumentWithGroq(newDoc);
+                    
+                    // Update UI
+                    renderRecentDocuments();
+                    showDocument();
+                };
+                
+                if (fileType === 'pdf') {
+                    // For demo purposes, we'll just show the file name for PDFs
+                    reader.readAsDataURL(file);
+                } else {
+                    reader.readAsText(file);
+                }
+            }, 1000);
+        }
+
+        // Start processing animation
+        function startProcessing() {
+            state.processingState = 'uploading';
+            elements.emptyState.classList.add('hidden');
+            elements.contentArea.classList.remove('hidden');
+            
+            // Reset progress
+            elements.progressBar.style.width = '0%';
+            elements.progressBar.className = 'progress-bar bg-blue-600 h-2.5 rounded-full';
+            elements.processingStatus.textContent = 'Uploading...';
+            elements.processingStatus.className = 'text-sm text-blue-600 dark:text-blue-400';
+            
+            // Reset steps
+            elements.uploadStep.className = 'p-2 rounded bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200';
+            elements.uploadStep.querySelector('div:last-child').textContent = '0%';
+            elements.parsingStep.className = 'p-2 rounded bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200';
+            elements.parsingStep.querySelector('div:last-child').textContent = '0%';
+            elements.analysisStep.className = 'p-2 rounded bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200';
+            elements.analysisStep.querySelector('div:last-child').textContent = '0%';
+            elements.resultsStep.className = 'p-2 rounded bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200';
+            elements.resultsStep.querySelector('div:last-child').textContent = '0%';
+            
+            // Simulate upload progress
+            let progress = 0;
+            const uploadInterval = setInterval(() => {
+                progress += 5;
+                elements.progressBar.style.width = `${progress}%`;
+                elements.uploadStep.querySelector('div:last-child').textContent = `${progress}%`;
+                
+                if (progress >= 100) {
+                    clearInterval(uploadInterval);
+                    state.processingState = 'parsing';
+                    elements.processingStatus.textContent = 'Parsing...';
+                    elements.progressBar.className = 'progress-bar bg-yellow-600 h-2.5 rounded-full';
+                    elements.uploadStep.className = 'p-2 rounded bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200';
+                    elements.uploadStep.querySelector('div:last-child').textContent = '100%';
+                    
+                    // Start parsing
+                    simulateParsing();
+                }
+            }, 100);
+        }
+
+        // Simulate document parsing
+        function simulateParsing() {
+            let progress = 0;
+            const parsingInterval = setInterval(() => {
+                progress += 10;
+                elements.progressBar.style.width = `${progress}%`;
+                elements.parsingStep.querySelector('div:last-child').textContent = `${progress}%`;
+                
+                if (progress >= 100) {
+                    clearInterval(parsingInterval);
+                    state.processingState = 'analyzing';
+                    elements.processingStatus.textContent = 'Analyzing...';
+                    elements.progressBar.className = 'progress-bar bg-purple-600 h-2.5 rounded-full';
+                    elements.parsingStep.className = 'p-2 rounded bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200';
+                    elements.parsingStep.querySelector('div:last-child').textContent = '100%';
+                    
+                    // Start analysis
+                    simulateAnalysis();
+                }
+            }, 200);
+        }
+
+        // Simulate document analysis
+        function simulateAnalysis() {
+            let progress = 0;
+            const analysisInterval = setInterval(() => {
+                progress += 2;
+                elements.progressBar.style.width = `${progress}%`;
+                elements.analysisStep.querySelector('div:last-child').textContent = `${progress}%`;
+                
+                if (progress >= 100) {
+                    clearInterval(analysisInterval);
+                    state.processingState = 'completed';
+                    elements.processingStatus.textContent = 'Completed';
+                    elements.progressBar.className = 'progress-bar bg-green-600 h-2.5 rounded-full';
+                    elements.analysisStep.className = 'p-2 rounded bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200';
+                    elements.analysisStep.querySelector('div:last-child').textContent = '100%';
+                    elements.resultsStep.className = 'p-2 rounded bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200';
+                    elements.resultsStep.querySelector('div:last-child').textContent = '100%';
+                    
+                    // Show completion toast
+                    showToast('Document analysis completed');
+                }
+            }, 100);
+        }
+
+        // Process document with Groq API
+        async function processDocumentWithGroq(document) {
+            if (!state.apiKey) {
+                showToast('API key required for analysis', 'error');
+                return;
+            }
+            
+            try {
+                // In a real implementation, you would send the document to your backend
+                // which would then call the Groq API. For this demo, we'll simulate it.
+                
+                // Simulate API call delay
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                // Generate mock analysis results
+                document.analysis = generateMockAnalysis(document.content);
+                
+                // Update UI
+                renderDocumentAnalysis(document);
+                
+            } catch (error) {
+                console.error('Error processing document:', error);
+                showToast('Error processing document', 'error');
+            }
+        }
+
+        // Generate mock analysis results for demo
+        function generateMockAnalysis(content) {
+            // This is just for demo purposes - in a real app you would use Groq API
+            const wordCount = content.split(/\s+/).length;
+            const citationCount = (content.match(/\([^)]+\)/g) || []).length;
+            
+            return {
+                academicQuality: parseFloat((7 + Math.random() * 2).toFixed(1)),
+                writingQuality: parseFloat((6.5 + Math.random() * 2).toFixed(1)),
+                originality: parseFloat((8 + Math.random() * 2).toFixed(1)),
+                citationQuality: parseFloat((7 + Math.random() * 2).toFixed(1)),
+                readability: parseFloat((7.5 + Math.random() * 1.5).toFixed(1)),
+                plagiarism: {
+                    percentage: Math.floor(Math.random() * 5),
+                    matches: [
+                        {
+                            text: content.substring(100, 150),
+                            source: 'Similar text found in Smith (2020)'
+                        }
+                    ]
+                },
+                suggestions: [
+                    {
+                        text: content.substring(50, 70),
+                        suggestion: 'Consider rephrasing for clarity'
+                    }
+                ],
+                citations: Array.from({length: citationCount}, (_, i) => ({
+                    key: `ref${i+1}`,
+                    text: `Author et al., ${2020 + i}`
+                }))
+            };
+        }
+
+        // Load a document
+        function loadDocument(docId) {
+            const doc = state.documents.find(d => d.id === docId);
+            if (!doc) return;
+            
+            state.currentDocument = doc;
+            showDocument();
+            
+            // If document hasn't been analyzed yet, analyze it
+            if (!doc.analysis) {
+                startProcessing();
+                processDocumentWithGroq(doc);
+            }
+        }
+
+        // Show the current document
+        function showDocument() {
+            if (!state.currentDocument) {
+                elements.emptyState.classList.remove('hidden');
+                elements.contentArea.classList.add('hidden');
+                return;
+            }
+            
+            elements.emptyState.classList.add('hidden');
+            elements.contentArea.classList.remove('hidden');
+            
+            // Set document title
+            elements.documentTitle.textContent = state.currentDocument.name;
+            
+            // Render document preview
+            renderDocumentPreview();
+            
+            // Render document metadata
+            renderDocumentMetadata();
+            
+            // Render analysis if available
+            if (state.currentDocument.analysis) {
+                renderDocumentAnalysis(state.currentDocument);
+            }
+            
+            // Update recent documents list
+            renderRecentDocuments();
+        }
+
+        // Render document preview
+        function renderDocumentPreview() {
+            if (!state.currentDocument) return;
+            
+            // For demo purposes, we'll just show the text content
+            // In a real app, you would properly render different file types
+            let content = state.currentDocument.content;
+            
+            // Add highlights for analysis results if available
+            if (state.currentDocument.analysis) {
+                const analysis = state.currentDocument.analysis;
+                
+                // Highlight plagiarism matches
+                if (analysis.plagiarism?.matches) {
+                    analysis.plagiarism.matches.forEach(match => {
+                        content = content.replace(match.text, 
+                            `<span class="plagiarism-highlight" data-source="${match.source}">${match.text}</span>`);
+                    });
+                }
+                
+                // Add writing suggestions
+                if (analysis.suggestions) {
+                    analysis.suggestions.forEach(suggestion => {
+                        content = content.replace(suggestion.text, 
+                            `<span class="writing-suggestion" data-suggestion="${suggestion.suggestion}">${suggestion.text}</span>`);
+                    });
+                }
+                
+                // Add citation markers
+                if (analysis.citations) {
+                    analysis.citations.forEach(citation => {
+                        const citationText = `(${citation.text})`;
+                        content = content.replace(citationText, 
+                            `<span class="citation" data-ref="${citation.key}">${citationText}</span>`);
+                    });
+                }
+            }
+            
+            elements.documentPreview.innerHTML = content;
+            elements.documentPreview.style.fontSize = `${state.fontSize}px`;
+            
+            // Add event listeners to interactive elements
+            document.querySelectorAll('.citation').forEach(el => {
+                el.addEventListener('click', () => {
+                    const ref = el.getAttribute('data-ref');
+                    showToast(`Showing details for citation: ${ref}`);
+                });
+            });
+            
+            document.querySelectorAll('.plagiarism-highlight').forEach(el => {
+                el.addEventListener('click', () => {
+                    const source = el.getAttribute('data-source');
+                    showToast(`Potential plagiarism: ${source}`, 'error');
+                });
+            });
+            
+            document.querySelectorAll('.writing-suggestion').forEach(el => {
+                el.addEventListener('click', () => {
+                    const suggestion = el.getAttribute('data-suggestion');
+                    showToast(`Suggestion: ${suggestion}`);
+                });
+            });
+        }
+
+        // Render document metadata
+        function renderDocumentMetadata() {
+            if (!state.currentDocument?.metadata) return;
+            
+            const metadata = state.currentDocument.metadata;
+            const formattedDate = formatDate(metadata.lastAnalyzed);
+            
+            elements.documentMetadata.innerHTML = `
+                <div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Title</div>
+                    <div class="font-medium truncate">${state.currentDocument.name}</div>
+                </div>
+                <div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Author</div>
+                    <div class="font-medium">${metadata.author}</div>
+                </div>
+                <div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Institution</div>
+                    <div class="font-medium">${metadata.institution}</div>
+                </div>
+                <div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Word Count</div>
+                    <div class="font-medium">${metadata.wordCount.toLocaleString()}</div>
+                </div>
+                <div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Citations</div>
+                    <div class="font-medium">${metadata.citations}</div>
+                </div>
+                <div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Last Analyzed</div>
+                    <div class="font-medium">${formattedDate}</div>
+                </div>
+            `;
+        }
+
+        // Render document analysis
+        function renderDocumentAnalysis(document) {
+            if (!document.analysis) return;
+            
+            const analysis = document.analysis;
+            
+            // Render analysis summary
+            elements.analysisSummary.innerHTML = `
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <span class="text-sm font-medium">Academic Quality</span>
+                        <span class="text-sm font-medium">${analysis.academicQuality}/10</span>
+                    </div>
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div class="bg-blue-600 h-2 rounded-full" style="width: ${analysis.academicQuality * 10}%"></div>
+                    </div>
+                </div>
+                
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <span class="text-sm font-medium">Writing Quality</span>
+                        <span class="text-sm font-medium">${analysis.writingQuality}/10</span>
+                    </div>
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div class="bg-green-600 h-2 rounded-full" style="width: ${analysis.writingQuality * 10}%"></div>
+                    </div>
+                </div>
+                
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <span class="text-sm font-medium">Originality</span>
+                        <span class="text-sm font-medium">${analysis.originality}/10</span>
+                    </div>
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div class="bg-purple-600 h-2 rounded-full" style="width: ${analysis.originality * 10}%"></div>
+                    </div>
+                </div>
+                
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <span class="text-sm font-medium">Citation Quality</span>
+                        <span class="text-sm font-medium">${analysis.citationQuality}/10</span>
+                    </div>
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div class="bg-yellow-600 h-2 rounded-full" style="width: ${analysis.citationQuality * 10}%"></div>
+                    </div>
+                </div>
+                
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <span class="text-sm font-medium">Readability</span>
+                        <span class="text-sm font-medium">${analysis.readability}/10</span>
+                    </div>
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div class="bg-pink-600 h-2 rounded-full" style="width: ${analysis.readability * 10}%"></div>
+                    </div>
+                </div>
+            `;
+            
+            // Render detailed analysis
+            elements.detailedAnalysis.innerHTML = `
+                <div class="mb-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="font-medium text-blue-600 dark:text-blue-400">Plagiarism Detection</h4>
+                        <span class="text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 px-2 py-1 rounded">${analysis.plagiarism.percentage}% match</span>
+                    </div>
+                    <p class="text-sm">${analysis.plagiarism.percentage < 5 ? 'Minimal matching content found (well below 15% threshold).' : 'Moderate matching content found (below 15% threshold).'} ${analysis.plagiarism.matches.length} passage${analysis.plagiarism.matches.length !== 1 ? 's' : ''} require review.</p>
+                </div>
+                
+                <div class="mb-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="font-medium text-green-600 dark:text-green-400">Writing Quality</h4>
+                        <span class="text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded">${analysis.writingQuality}/10</span>
+                    </div>
+                    <p class="text-sm">${getWritingQualityAssessment(analysis.writingQuality)} ${analysis.suggestions.length} specific suggestion${analysis.suggestions.length !== 1 ? 's' : ''} provided.</p>
+                </div>
+                
+                <div class="mb-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="font-medium text-purple-600 dark:text-purple-400">Citation Analysis</h4>
+                        <span class="text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 px-2 py-1 rounded">${document.metadata.citations} citation${document.metadata.citations !== 1 ? 's' : ''}</span>
+                    </div>
+                    <p class="text-sm">Proper citation format used. ${analysis.citationQuality > 8 ? 'All citations are from reputable sources.' : 'Consider adding more recent or authoritative sources.'}</p>
+                </div>
+                
+                <div class="mb-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="font-medium text-yellow-600 dark:text-yellow-400">Technical Concepts</h4>
+                        <span class="text-xs bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 px-2 py-1 rounded">${countTechnicalTerms(document.content)} terms</span>
+                    </div>
+                    <p class="text-sm">Key concepts are ${analysis.academicQuality > 7 ? 'well' : 'adequately'} explained. ${analysis.academicQuality > 7 ? '' : 'Consider adding definitions or examples for technical terms.'}</p>
+                </div>
+                
+                <div class="mb-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="font-medium text-pink-600 dark:text-pink-400">Readability</h4>
+                        <span class="text-xs bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200 px-2 py-1 rounded">Grade ${Math.floor(analysis.readability * 1.5) + 10}+</span>
+                    </div>
+                    <p class="text-sm">${getReadabilityAssessment(analysis.readability)}</p>
+                </div>
+                
+                <div class="mb-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="font-medium text-indigo-600 dark:text-indigo-400">Grade Assessment</h4>
+                        <span class="text-xs bg-pink-100 dark:bg-pink-900 text-pink-800 dark:text-pink-200 px-2 py-1 rounded">${getGradeRange(analysis.academicQuality, analysis.writingQuality, analysis.originality)}</span>
+                    </div>
+                    <p class="text-sm">Based on typical academic rubric, this document would score in the ${getGradeRange(analysis.academicQuality, analysis.writingQuality, analysis.originality)} range.</p>
+                </div>
+                
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="font-medium text-red-600 dark:text-red-400">Suggested Resources</h4>
+                        <span class="text-xs bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 px-2 py-1 rounded">3 items</span>
+                    </div>
+                    <ul class="text-sm list-disc pl-5 space-y-1">
+                        <li>"Academic Writing Excellence" - Williams (2021)</li>
+                        <li>"Research Methodology Handbook" - University Press</li>
+                        <li>Writing Center Workshop: ${analysis.writingQuality > 7 ? 'Advanced Techniques' : 'Improving Clarity'}</li>
+                    </ul>
+                </div>
+            `;
+        }
+
+        // Helper function to assess writing quality
+        function getWritingQualityAssessment(score) {
+            if (score >= 9) return 'Excellent academic tone with minimal suggestions for improvement.';
+            if (score >= 7) return 'Good academic tone with minor suggestions for improvement.';
+            if (score >= 5) return 'Adequate writing quality with several areas for improvement.';
+            return 'Needs significant improvement in academic writing style.';
+        }
+
+        // Helper function to assess readability
+        function getReadabilityAssessment(score) {
+            if (score >= 9) return 'Excellent readability for target academic audience.';
+            if (score >= 7) return 'Appropriate readability for academic audience.';
+            if (score >= 5) return 'Somewhat challenging readability - consider simplifying complex sentences.';
+            return 'Difficult readability - may hinder comprehension for many readers.';
+        }
+
+        // Helper function to estimate grade range
+        function getGradeRange(academicQuality, writingQuality, originality) {
+            const avg = (academicQuality + writingQuality + originality) / 3;
+            if (avg >= 9) return 'A';
+            if (avg >= 8) return 'A-';
+            if (avg >= 7) return 'B+';
+            if (avg >= 6) return 'B';
+            if (avg >= 5) return 'C+';
+            return 'C or below';
+        }
+
+        // Helper function to count technical terms (simplified for demo)
+        function countTechnicalTerms(content) {
+            const techTerms = ['machine learning', 'algorithm', 'model', 'data', 'analysis', 'method', 'technique', 'framework'];
+            return techTerms.reduce((count, term) => {
+                return count + (content.toLowerCase().includes(term) ? 1 : 0);
+            }, 0);
+        }
+
+        // Activate a tool
+        function activateTool(tool) {
+            state.activeTool = tool;
+            
+            // Update UI to show active tool
+            document.querySelectorAll('.sidebar-item').forEach(item => {
+                if (item.getAttribute('data-tool') === tool) {
+                    item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+            
+            // In a real app, you would implement the tool functionality
+            showToast(`Activated tool: ${tool.replace('-', ' ')}`);
+        }
+
+        // Download current document
+        function downloadDocument() {
+            if (!state.currentDocument) return;
+            
+            const blob = new Blob([state.currentDocument.content], {type: 'text/plain'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = state.currentDocument.name;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showToast('Download started');
+        }
+
+        // Initialize the app
+        init();
+    </script>
+</body>
+</html>
