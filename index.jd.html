@@ -1,0 +1,173 @@
+<!--
+  Academic Document Analyzer (Frontend-only, self-contained)
+  Creatively engineered by John D Dondlinger
+  Host this file on GitHub Pages or open directly in your browser.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Academic Document Analyzer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+  <div class="container mx-auto px-4 py-8 max-w-2xl">
+    <h1 class="text-3xl font-bold mb-2">Academic Document Analyzer</h1>
+    <p class="mb-4 text-sm text-gray-400">Creatively engineered by John D Dondlinger. 100% browser-based. No install, no server, no Python required.</p>
+    <div class="bg-gray-800 rounded-xl shadow-xl p-6 mb-6">
+      <label class="block mb-2 font-semibold">Paste your Groq/OpenAI API Key:</label>
+      <input id="apiKey" type="password" class="w-full p-2 rounded bg-gray-700 text-gray-100 mb-4" placeholder="groq-..." autocomplete="off">
+      <label class="block mb-2 font-semibold">Choose Groq Model:</label>
+      <select id="modelSelect" class="w-full p-2 rounded bg-gray-700 text-gray-100 mb-4"></select>
+      <label class="block mb-2 font-semibold">Paste or upload your document:</label>
+      <textarea id="docInput" rows="8" class="w-full p-2 rounded bg-gray-700 text-gray-100 mb-2" placeholder="Paste text here..."></textarea>
+      <input id="fileInput" type="file" accept=".txt,.md,.csv,.json,.log,.pdf" class="mb-4">
+      <label class="block mb-2 font-semibold">Analysis Prompt (optional):</label>
+      <input id="promptInput" type="text" class="w-full p-2 rounded bg-gray-700 text-gray-100 mb-4" placeholder="e.g. Give feedback on writing quality">
+      <button id="analyzeBtn" class="w-full py-2 bg-blue-600 hover:bg-blue-700 rounded font-bold">Analyze Document</button>
+    </div>
+    <div id="output" class="bg-gray-800 rounded-xl shadow-xl p-6 min-h-[120px] whitespace-pre-wrap"></div>
+    <div class="mt-8 text-xs text-gray-500 text-center">This tool runs 100% in your browser. Your API key and data are never sent anywhere except directly to the AI API you choose.</div>
+  </div>
+  <script>
+    // File upload handler
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+        // PDF: Use PDF.js to extract text
+        const reader = new FileReader();
+        reader.onload = async function(evt) {
+          const typedarray = new Uint8Array(evt.target.result);
+          // Load PDF.js dynamically
+          if (!window.pdfjsLib) {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.min.js';
+            script.onload = () => extractPdfText(typedarray);
+            document.body.appendChild(script);
+          } else {
+            extractPdfText(typedarray);
+          }
+          function extractPdfText(typedarray) {
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.worker.min.js';
+            window.pdfjsLib.getDocument(typedarray).promise.then(async function(pdf) {
+              let text = '';
+              for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const content = await page.getTextContent();
+                text += content.items.map(item => item.str).join(' ') + '\n';
+              }
+              document.getElementById('docInput').value = text;
+            });
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      } else {
+        // Not PDF: treat as text
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+          document.getElementById('docInput').value = evt.target.result;
+        };
+        reader.readAsText(file);
+      }
+    });
+
+    // On page load, fetch Groq models if API key is present
+    async function fetchGroqModels(apiKey) {
+      const output = document.getElementById('output');
+      const modelSelect = document.getElementById('modelSelect');
+      modelSelect.innerHTML = '<option>Loading models...</option>';
+      try {
+        const res = await fetch('https://api.groq.com/openai/v1/models', {
+          headers: { 'Authorization': `Bearer ${apiKey}` }
+        });
+        if (!res.ok) throw new Error('Failed to fetch models: ' + res.status);
+        const data = await res.json();
+        if (!data.data || !Array.isArray(data.data)) throw new Error('No models found');
+        modelSelect.innerHTML = '';
+        data.data.forEach(model => {
+          const opt = document.createElement('option');
+          opt.value = model.id;
+          opt.textContent = model.id;
+          modelSelect.appendChild(opt);
+        });
+      } catch (e) {
+        modelSelect.innerHTML = '<option>Error loading models</option>';
+        output.innerHTML = '<span class="text-red-400">' + e.message + '</span>';
+      }
+    }
+    // When API key changes, fetch models
+    document.getElementById('apiKey').addEventListener('change', function() {
+      const apiKey = this.value.trim();
+      if (apiKey.startsWith('groq-')) fetchGroqModels(apiKey);
+    });
+    // On page load, if API key is prefilled, fetch models
+    window.addEventListener('DOMContentLoaded', function() {
+      const apiKey = document.getElementById('apiKey').value.trim();
+      if (apiKey.startsWith('groq-')) fetchGroqModels(apiKey);
+    });
+
+    // Main analysis handler
+    document.getElementById('analyzeBtn').onclick = async function() {
+      const apiKey = document.getElementById('apiKey').value.trim();
+      const doc = document.getElementById('docInput').value.trim();
+      const prompt = document.getElementById('promptInput').value.trim() ||
+        'Analyze this academic document and provide constructive feedback.';
+      const output = document.getElementById('output');
+      output.textContent = '';
+      if (!apiKey) {
+        output.textContent = 'Please enter your API key.';
+        return;
+      }
+      if (!doc) {
+        output.textContent = 'Please paste or upload a document.';
+        return;
+      }
+      output.innerHTML = '<span class="text-blue-400">Analyzing, please wait...</span>';
+      if (apiKey.startsWith('groq-')) {
+        const model = document.getElementById('modelSelect').value || 'llama3-8b-8192';
+        apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
+        headers = {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        };
+        body = JSON.stringify({
+          model: model,
+          messages: [
+            { role: 'system', content: 'You are an expert academic writing coach.' },
+            { role: 'user', content: prompt + '\n\n---\n' + doc }
+          ],
+          max_tokens: 1024,
+          temperature: 0.7
+        });
+      } else {
+        output.innerHTML = '<span class="text-red-400">API key must start with groq-.</span>';
+        return;
+      }
+      try {
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers,
+          body
+        });
+        if (!res.ok) {
+          const err = await res.text();
+          throw new Error('API error: ' + err);
+        }
+        const data = await res.json();
+        let reply = '';
+        if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
+          reply = data.choices[0].message.content;
+        } else {
+          reply = JSON.stringify(data, null, 2);
+        }
+        output.innerHTML = '<span class="text-green-400">AI Feedback:</span>\n' + reply;
+      } catch (e) {
+        output.innerHTML = '<span class="text-red-400">Error:</span> ' + e.message +
+          '<br><span class="text-xs text-gray-400">(If you see a CORS error, your browser is blocking direct API calls. Try a different browser or use a backend server.)</span>';
+      }
+    };
+  </script>
+</body>
+</html>
