@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AcademicDocAnalyzer | Document Analysis & RAG System</title>
+    <title>Dondlinger | Document Analysis & RAG System</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -116,7 +116,7 @@
         <div class="hidden md:flex md:flex-shrink-0">
             <div class="flex flex-col w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
                 <div class="h-16 flex items-center px-4 border-b border-gray-200 dark:border-gray-700">
-                    <h1 class="text-xl font-bold text-blue-600 dark:text-blue-400">AcademicDocAnalyzer</h1>
+                    <h1 class="text-xl font-bold text-blue-600 dark:text-blue-400">Dondlinger</h1>
                 </div>
                 <div class="flex flex-col flex-grow overflow-y-auto">
                     <div class="px-4 py-4">
@@ -197,10 +197,12 @@
                 <div class="p-4 border-t border-gray-200 dark:border-gray-700">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
-                            <img class="h-8 w-8 rounded-full" src="https://ui-avatars.com/api/?name=User+Name" alt="User profile">
+                            <img class="h-8 w-8 rounded-full" src="https://ui-avatars.com/api/?name=Dondlinger" alt="Dondlinger profile">
                         </div>
                         <div class="ml-3">
-                            <div id="userName" class="text-sm font-medium">User Name</div>
+                            <div id="userName" class="text-sm font-medium">Dondlinger</div>
+                            <input type="text" class="text-xs px-1 py-0.5 rounded border border-gray-300 dark:bg-gray-700 dark:border-gray-600 hidden">
+                            <button class="ml-1 text-xs text-blue-600 dark:text-blue-400 underline">Set Name</button>
                             <div class="text-xs text-gray-500 dark:text-gray-400">Role</div>
                         </div>
                         <button id="settingsBtn" class="ml-auto text-gray-400 hover:text-gray-500">
@@ -220,6 +222,9 @@
                         <i class="fas fa-bars"></i>
                     </button>
                     <h2 id="documentTitle" class="text-lg font-semibold">Document Analysis Dashboard</h2>
+                    <button id="renameBtn" class="ml-2 px-2 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600">Rename</button>
+                    <button id="deleteBtn" class="ml-2 px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600">Delete</button>
+                    <button id="exportBtn" class="ml-2 px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600">Export Analysis</button>
                 </div>
                 
                 <div class="flex items-center space-x-4">
@@ -345,7 +350,7 @@
         <div class="fixed inset-0 bg-gray-600 bg-opacity-75" aria-hidden="true"></div>
         <div class="relative flex flex-col w-full max-w-xs bg-white dark:bg-gray-800 h-full">
             <div class="h-16 flex items-center px-4 border-b border-gray-200 dark:border-gray-700">
-                <h1 class="text-xl font-bold text-blue-600 dark:text-blue-400">AcademicDocAnalyzer</h1>
+                <h1 class="text-xl font-bold text-blue-600 dark:text-blue-400">Dondlinger</h1>
                 <button id="closeSidebar" class="ml-auto text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
                     <i class="fas fa-times"></i>
                 </button>
@@ -438,7 +443,12 @@
             settingsBtn: document.getElementById('settingsBtn'),
             notificationsBtn: document.getElementById('notificationsBtn'),
             notificationBadge: document.getElementById('notificationBadge'),
-            userName: document.getElementById('userName')
+            userName: document.getElementById('userName'),
+            renameBtn: null,
+            deleteBtn: null,
+            exportBtn: null,
+            setNameBtn: null,
+            nameInput: null
         };
 
         // Initialize the application
@@ -460,7 +470,38 @@
             }
 
             // Set user name
-            elements.userName.textContent = localStorage.getItem('userName') || 'User Name';
+            elements.userName.textContent = localStorage.getItem('userName') || 'Dondlinger';
+
+            // Add new buttons dynamically
+            elements.renameBtn = document.createElement('button');
+            elements.renameBtn.id = 'renameBtn';
+            elements.renameBtn.className = 'ml-2 px-2 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600';
+            elements.renameBtn.textContent = 'Rename';
+            elements.documentTitle.parentNode.appendChild(elements.renameBtn);
+
+            elements.deleteBtn = document.createElement('button');
+            elements.deleteBtn.id = 'deleteBtn';
+            elements.deleteBtn.className = 'ml-2 px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600';
+            elements.deleteBtn.textContent = 'Delete';
+            elements.documentTitle.parentNode.appendChild(elements.deleteBtn);
+
+            elements.exportBtn = document.createElement('button');
+            elements.exportBtn.id = 'exportBtn';
+            elements.exportBtn.className = 'ml-2 px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600';
+            elements.exportBtn.textContent = 'Export Analysis';
+            elements.documentTitle.parentNode.appendChild(elements.exportBtn);
+
+            // User name set UI
+            const nameDiv = elements.userName.parentNode;
+            elements.nameInput = document.createElement('input');
+            elements.nameInput.type = 'text';
+            elements.nameInput.value = elements.userName.textContent;
+            elements.nameInput.className = 'text-xs px-1 py-0.5 rounded border border-gray-300 dark:bg-gray-700 dark:border-gray-600 hidden';
+            nameDiv.appendChild(elements.nameInput);
+            elements.setNameBtn = document.createElement('button');
+            elements.setNameBtn.className = 'ml-1 text-xs text-blue-600 dark:text-blue-400 underline';
+            elements.setNameBtn.textContent = 'Set Name';
+            nameDiv.appendChild(elements.setNameBtn);
         }
 
         // Set up all event listeners
@@ -497,6 +538,63 @@
                     const tool = button.getAttribute('data-tool');
                     activateTool(tool);
                 });
+            });
+
+            // Rename document
+            elements.renameBtn.addEventListener('click', () => {
+                if (!state.currentDocument) return;
+                const newName = prompt('Enter new document name:', state.currentDocument.name);
+                if (newName && newName.trim()) {
+                    state.currentDocument.name = newName.trim();
+                    renderRecentDocuments();
+                    showDocument();
+                }
+            });
+
+            // Delete document
+            elements.deleteBtn.addEventListener('click', () => {
+                if (!state.currentDocument) return;
+                if (confirm('Delete this document?')) {
+                    state.documents = state.documents.filter(d => d.id !== state.currentDocument.id);
+                    state.currentDocument = state.documents[0] || null;
+                    renderRecentDocuments();
+                    showDocument();
+                }
+            });
+
+            // Export analysis
+            elements.exportBtn.addEventListener('click', () => {
+                if (!state.currentDocument || !state.currentDocument.analysis) return;
+                const summary = elements.analysisSummary.innerText;
+                const blob = new Blob([summary], {type: 'text/plain'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = state.currentDocument.name.replace(/\.[^.]+$/, '') + '-analysis.txt';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast('Analysis exported');
+            });
+
+            // Set user name
+            elements.setNameBtn.addEventListener('click', () => {
+                elements.userName.classList.add('hidden');
+                elements.nameInput.classList.remove('hidden');
+                elements.nameInput.focus();
+            });
+            elements.nameInput.addEventListener('blur', () => {
+                const val = elements.nameInput.value.trim();
+                if (val) {
+                    elements.userName.textContent = val;
+                    localStorage.setItem('userName', val);
+                }
+                elements.userName.classList.remove('hidden');
+                elements.nameInput.classList.add('hidden');
+            });
+            elements.nameInput.addEventListener('keydown', e => {
+                if (e.key === 'Enter') elements.nameInput.blur();
             });
         }
 
