@@ -6,156 +6,24 @@
     <title>NeuroPulse AI Chat</title>
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="style.css">
+    <!-- Groqee Integration -->
+    <link rel="stylesheet" href="pwa-assets/groqee-chat.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css">
-    <!-- Simplified theme-color to ensure maximum compatibility -->
+    <!-- Updated CSP to allow Groqee to work properly -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://api.groq.com; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data:; font-src 'self' https://cdn.jsdelivr.net;">
     <meta name="theme-color" content="#6366f1"/>
     <link rel="apple-touch-icon" href="icons/icon-192x192.png">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://api.groq.com; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data:; font-src 'self' https://cdn.jsdelivr.net;">
 </head>
 <body>
-    <div class="app-container">
-        <!-- Sidebar for conversations -->
-        <div class="sidebar">
-            <div class="sidebar-header">
-                <div class="logo-section">
-                    <div class="pulse-icon"></div>
-                    <h1>NeuroPulse</h1>
-                </div>
-                <button id="new-chat-btn" class="new-chat-btn">
-                    <i class="ri-add-line"></i>
-                    <span>New Chat</span>
-                </button>
-            </div>
-            <div class="conversations-container">
-                <div id="conversations-list" class="conversations-list">
-                    <!-- Conversations will be added here dynamically -->
-                </div>
-            </div>
-            <div class="sidebar-footer">
-                <div class="model-selector-container">
-                    <label for="model-selector">Model:</label>
-                    <select id="model-selector" class="model-selector">
-                        <!-- Options will be added dynamically -->
-                    </select>
-                </div>
-                <div class="sidebar-actions">
-                    <button id="export-btn" title="Export conversation">
-                        <i class="ri-download-2-line"></i>
-                    </button>
-                    <button id="settings-button" title="Settings">
-                        <i class="ri-settings-3-line"></i>
-                    </button>
-                    <button id="theme-switch" title="Toggle theme">
-                        <i class="ri-contrast-2-line"></i>
-                    </button>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Main content area -->
-        <div class="main-content">
-            <header>
-                <button id="sidebar-toggle" class="sidebar-toggle" title="Toggle sidebar">
-                    <i class="ri-menu-line"></i>
-                </button>
-                <div class="chat-info">
-                    <span class="beta-tag">BETA</span>
-                </div>
-                <div class="header-actions">
-                    <button id="tts-toggle" title="Read aloud">
-                        <i class="ri-volume-up-line"></i>
-                    </button>
-                    <button id="clear-chat" title="Clear chat">
-                        <i class="ri-delete-bin-2-line"></i>
-                    </button>
-                </div>
-            </header>
-            
-            <main>
-                <div id="chat-container">
-                    <div id="messages">
-                        <div class="welcome-message">
-                            <h2>Welcome to NeuroPulse</h2>
-                            <p>Experience the future of AI chat with blazing-fast responses powered by Groq.</p>
-                            <div class="features">
-                                <div class="feature">
-                                    <i class="ri-flashlight-line"></i>
-                                    <span>Lightning-fast responses</span>
-                                </div>
-                                <div class="feature">
-                                    <i class="ri-brain-line"></i>
-                                    <span>Advanced AI understanding</span>
-                                </div>
-                                <div class="feature">
-                                    <i class="ri-code-line"></i>
-                                    <span>Code highlighting</span>
-                                </div>
-                            </div>
-                            
-                            <div class="quick-actions">
-                                <h3>Try asking:</h3>
-                                <div class="quick-action-buttons">
-                                    <button class="quick-action" data-action="Write a short story about a robot who discovers emotions.">
-                                        <i class="ri-robot-line"></i>
-                                        <span>Robot story</span>
-                                    </button>
-                                    <button class="quick-action" data-action="Explain quantum computing to a 10-year-old.">
-                                        <i class="ri-cpu-line"></i>
-                                        <span>Quantum computing</span>
-                                    </button>
-                                    <button class="quick-action" data-action="Create a 7-day workout plan for beginners.">
-                                        <i class="ri-heart-pulse-line"></i>
-                                        <span>Workout plan</span>
-                                    </button>
-                                    <button class="quick-action" data-action="Write a haiku about the moon.">
-                                        <i class="ri-quill-pen-line"></i>
-                                        <span>Moon haiku</span>
-                                    </button>
-                                    <button class="quick-action" data-action="Analyze this image for objects.">
-                                        <i class="ri-image-line"></i>
-                                        <span>Image analysis</span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="input-area">
-                        <div class="input-wrapper">
-                            <textarea id="user-input" 
-                                    placeholder="Ask anything... (Shift+Enter for new line)"
-                                    rows="1"
-                                    data-gramm="false"></textarea>
-                            <button id="voice-input" aria-label="Voice input">
-                                <i class="ri-mic-line"></i>
-                            </button>
-                            <input type="file" id="image-upload" accept="image/*" style="display: none;">
-                            <button id="image-upload-btn" aria-label="Upload image">
-                                <i class="ri-image-line"></i>
-                            </button>
-                        </div>
-                        <button id="send-button" aria-label="Send message">
-                            <i class="ri-send-plane-fill"></i>
-                        </button>
-                    </div>
-                </div>
-            </main>
-            
-            <div id="status" class="offline">
-                <i class="ri-signal-wifi-error-line"></i>
-                <span>Offline</span>
-            </div>
-            
-            <div class="version-info">
-                v1.1 | Creatively Engineered by John Daniel Dondlinger, Dondlinger General Contracting LLC
-            </div>
-        </div>
-    </div>
     
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/core.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/python.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/javascript.min.js"></script>
+    
+    <!-- Groqee Integration -->
+    <script src="pwa-assets/groqee-chat.js"></script>
+    
     <script src="app.js"></script>
     <script>
         if ('serviceWorker' in navigator) {
