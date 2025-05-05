@@ -1,0 +1,23 @@
+{
+  "version": "3.6.4",
+  "name": "Groqee - Wisconsin's Finest",
+  "lastUpdated": "2025-05-04",
+  "components": {
+    "chat": {
+      "js": "pwa-assets/groqee-chat.js",
+      "css": "pwa-assets/groqee-chat.css"
+    },
+    "models": {
+      "data": "pwa-assets/groqee-models.json"
+    },
+    "templates": {
+      "data": "pwa-assets/groqee-templates.json"
+    }
+  },
+  "config": {
+    "defaultModel": "Musky (Most Powerful)",
+    "defaultTemplate": "Musky - Academic Coach",
+    "apiEndpoint": "/api/chat",
+    "requiresApiKey": true
+  }
+}

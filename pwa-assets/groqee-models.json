@@ -1,0 +1,34 @@
+{
+  "models": {
+    "Musky (Most Powerful)": {
+      "id": "llama-3.3-70b-versatile",
+      "context_window": 128000,
+      "max_tokens": 32768,
+      "description": "The most powerful model, excellent for complex tasks and deep reasoning"
+    },
+    "Compound Beta (Groq Native)": {
+      "id": "compound-beta",
+      "context_window": 128000,
+      "max_tokens": 8192,
+      "description": "Groq's native model, optimized for balanced performance"
+    },
+    "Sheepshead (Unlimited)": {
+      "id": "llama-3.1-8b-instant",
+      "context_window": 128000,
+      "max_tokens": 4096,
+      "description": "Cost-efficient model for extended conversations"
+    },
+    "Northern Pike (Fast)": {
+      "id": "llama-3.1-8b-instant",
+      "context_window": 128000,
+      "max_tokens": 8192,
+      "description": "Fast response times for interactive use"
+    },
+    "Walleye (Focused)": {
+      "id": "gemma2-9b-it",
+      "context_window": 8192,
+      "max_tokens": 4096,
+      "description": "Focused model for precise, specific tasks"
+    }
+  }
+}
