@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CareerPath Explorer | Groq-Powered Career Assessment</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.2/dist/vis-network.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .chat-container {
+            height: 65vh;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+        .mindmap-container {
+            height: 60vh;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .progress-ring__circle {
+            transition: stroke-dashoffset 0.3s;
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+        .skill-pill {
+            transition: all 0.2s ease;
+        }
+        .skill-pill:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+    <!-- Header -->
+    <header class="bg-indigo-600 text-white shadow-lg">
+        <div class="container mx-auto px-4 py-6 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <i class="fas fa-route text-2xl"></i>
+                <h1 class="text-2xl font-bold">CareerPath Explorer</h1>
+            </div>
+            <div class="flex items-center space-x-4">
+                <button id="coachBtn" class="bg-indigo-700 hover:bg-indigo-800 px-4 py-2 rounded-lg flex items-center">
+                    <i class="fas fa-chalkboard-teacher mr-2"></i> Coach Dashboard
+                </button>
+                <button class="bg-white text-indigo-600 hover:bg-gray-100 px-4 py-2 rounded-lg font-medium">
+                    Sign In
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-8">
+        <!-- Dashboard Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Left Panel - Session Controls -->
+            <div class="bg-white rounded-xl shadow-md p-6 lg:col-span-1">
+                <h2 class="text-xl font-bold text-gray-800 mb-6 flex items-center">
+                    <i class="fas fa-cogs mr-2 text-indigo-500"></i> Session Controls
+                </h2>
+                
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Number of Questions</label>
+                    <div class="flex items-center">
+                        <input type="range" id="questionCount" min="5" max="20" value="10" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        <span id="countDisplay" class="ml-4 text-gray-700 font-medium">10</span>
+                    </div>
+                </div>
+                
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Focus Area</label>
+                    <select id="focusArea" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="general">General Career Exploration</option>
+                        <option value="tech">Technology</option>
+                        <option value="healthcare">Healthcare</option>
+                        <option value="business">Business</option>
+                        <option value="creative">Creative Arts</option>
+                    </select>
+                </div>
+                
+                <div class="flex flex-col space-y-3">
+                    <button id="startSessionBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-4 rounded-lg font-medium flex items-center justify-center">
+                        <i class="fas fa-play mr-2"></i> Start New Session
+                    </button>
+                    <button id="restartSessionBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 py-3 px-4 rounded-lg font-medium flex items-center justify-center" disabled>
+                        <i class="fas fa-redo mr-2"></i> Restart Session
+                    </button>
+                </div>
+                
+                <div class="mt-8 pt-6 border-t border-gray-200">
+                    <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Session Progress</h3>
+                    <div class="flex justify-center">
+                        <div class="relative w-24 h-24">
+                            <svg class="w-full h-full" viewBox="0 0 36 36">
+                                <circle class="text-gray-200" stroke-width="3" fill="none" cx="18" cy="18" r="15" />
+                                <circle id="progressCircle" class="progress-ring__circle text-indigo-600" stroke-width="3" stroke-dasharray="100, 100" stroke-linecap="round" fill="none" cx="18" cy="18" r="15" />
+                            </svg>
+                            <div class="absolute inset-0 flex items-center justify-center">
+                                <span id="progressText" class="text-lg font-bold text-gray-800">0%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <p id="questionCounter" class="text-center mt-2 text-gray-600">Question 0/10</p>
+                </div>
+            </div>
+            
+            <!-- Center Panel - Chat Interface -->
+            <div class="bg-white rounded-xl shadow-md p-6 lg:col-span-2">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold text-gray-800 flex items-center">
+                        <i class="fas fa-comments mr-2 text-indigo-500"></i> Career Assessment Chat
+                    </h2>
+                    <div class="flex items-center space-x-2">
+                        <span id="aiStatus" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            <span class="w-2 h-2 mr-1 rounded-full bg-green-500"></span>
+                            Groq AI Ready
+                        </span>
+                    </div>
+                </div>
+                
+                <div id="chatContainer" class="chat-container mb-4 p-4 bg-gray-50 rounded-lg">
+                    <div class="text-center py-10 text-gray-500" id="welcomeMessage">
+                        <i class="fas fa-robot text-4xl mb-3 text-indigo-400"></i>
+                        <h3 class="text-xl font-medium mb-2">Welcome to CareerPath Explorer</h3>
+                        <p>Start a session to begin your personalized career assessment powered by Groq AI.</p>
+                    </div>
+                </div>
+                
+                <div id="inputArea" class="mt-4 flex" style="display: none;">
+                    <input type="text" id="userInput" placeholder="Type your answer here..." class="flex-1 px-4 py-3 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                    <button id="sendBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-r-lg font-medium">
+                        Send
+                    </button>
+                </div>
+                
+                <div id="quickReplies" class="mt-3 grid grid-cols-2 gap-2" style="display: none;"></div>
+                
+                <div id="skipArea" class="mt-3 text-right" style="display: none;">
+                    <button id="skipBtn" class="text-gray-500 hover:text-gray-700 text-sm font-medium">
+                        <i class="fas fa-forward mr-1"></i> Skip this question
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Results Section (Initially Hidden) -->
+        <div id="resultsSection" class="mt-12" style="display: none;">
+            <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                <div class="px-6 py-5 border-b border-gray-200 bg-indigo-50">
+                    <h2 class="text-xl font-bold text-gray-800 flex items-center">
+                        <i class="fas fa-chart-line mr-2 text-indigo-500"></i> Your Career Assessment Results
+                    </h2>
+                </div>
+                
+                <div class="p-6">
+                    <!-- Top Skills -->
+                    <div class="mb-8">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Your Top Skills</h3>
+                        <div id="skillsCloud" class="flex flex-wrap gap-3"></div>
+                    </div>
+                    
+                    <!-- Mind Map and Recommendations -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                        <div class="lg:col-span-2">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">Your Career Mind Map</h3>
+                            <div id="mindmap" class="mindmap-container"></div>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">Recommended Career Paths</h3>
+                            <div id="careerRecommendations" class="space-y-4"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Action Plan -->
+                    <div class="bg-indigo-50 rounded-lg p-5">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Your Action Plan</h3>
+                        <div id="actionPlan" class="space-y-3"></div>
+                    </div>
+                    
+                    <!-- Export Options -->
+                    <div class="mt-8 pt-6 border-t border-gray-200 flex justify-end space-x-3">
+                        <button class="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg font-medium flex items-center">
+                            <i class="fas fa-file-pdf mr-2"></i> Export as PDF
+                        </button>
+                        <button class="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg font-medium flex items-center">
+                            <i class="fas fa-image mr-2"></i> Save Mind Map
+                        </button>
+                        <button class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium flex items-center">
+                            <i class="fas fa-share-alt mr-2"></i> Share Results
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white py-8">
+        <div class="container mx-auto px-4">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-4 md:mb-0">
+                    <div class="flex items-center space-x-2">
+                        <i class="fas fa-route text-2xl text-indigo-400"></i>
+                        <span class="text-xl font-bold">CareerPath Explorer</span>
+                    </div>
+                    <p class="text-gray-400 mt-1">Powered by Groq AI</p>
+                </div>
+                <div class="flex space-x-6">
+                    <a href="#" class="hover:text-indigo-400">Privacy Policy</a>
+                    <a href="#" class="hover:text-indigo-400">Terms of Service</a>
+                    <a href="#" class="hover:text-indigo-400">Contact Us</a>
+                </div>
+            </div>
+            <div class="mt-8 pt-6 border-t border-gray-700 text-center text-gray-400 text-sm">
+                <p>© 2023 CareerPath Explorer. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // DOM Elements
+        const questionCount = document.getElementById('questionCount');
+        const countDisplay = document.getElementById('countDisplay');
+        const startSessionBtn = document.getElementById('startSessionBtn');
+        const restartSessionBtn = document.getElementById('restartSessionBtn');
+        const chatContainer = document.getElementById('chatContainer');
+        const inputArea = document.getElementById('inputArea');
+        const userInput = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const skipBtn = document.getElementById('skipBtn');
+        const skipArea = document.getElementById('skipArea');
+        const quickReplies = document.getElementById('quickReplies');
+        const welcomeMessage = document.getElementById('welcomeMessage');
+        const resultsSection = document.getElementById('resultsSection');
+        const progressCircle = document.getElementById('progressCircle');
+        const progressText = document.getElementById('progressText');
+        const questionCounter = document.getElementById('questionCounter');
+        const skillsCloud = document.getElementById('skillsCloud');
+        const careerRecommendations = document.getElementById('careerRecommendations');
+        const actionPlan = document.getElementById('actionPlan');
+        
+        // Session Variables
+        let sessionActive = false;
+        let currentQuestion = 0;
+        let totalQuestions = 10;
+        let userResponses = [];
+        let sessionData = {
+            skills: [],
+            interests: [],
+            values: [],
+            personalityTraits: []
+        };
+        
+        // Sample questions (in a real app, these would come from Groq API)
+        const questionBank = [
+            "What's a skill you've recently developed that you're proud of?",
+            "Do you prefer working independently or in a team?",
+            "What subjects or topics do you find most interesting?",
+            "Describe a project or accomplishment that gave you a sense of achievement.",
+            "What kind of work environment do you thrive in?",
+            "Are you more drawn to creative tasks or analytical tasks?",
+            "How do you handle tight deadlines or stressful situations?",
+            "What industries or fields are you curious about exploring?",
+            "Do you enjoy public speaking and presenting ideas to others?",
+            "What's more important to you: job stability or career growth opportunities?",
+            "How do you prefer to learn new things? (e.g., hands-on, reading, courses)",
+            "What role does work-life balance play in your career decisions?",
+            "Are you comfortable with frequent changes and adapting to new technologies?",
+            "What kind of impact do you want your work to have on others?",
+            "Do you see yourself in a leadership role in the future?",
+            "How important is salary compared to job satisfaction for you?",
+            "What are your thoughts on remote work versus in-office work?",
+            "Are you willing to relocate for the right career opportunity?",
+            "What would your ideal workday look like?",
+            "Where do you see yourself professionally in 5 years?"
+        ];
+        
+        // Quick reply options for some questions
+        const quickReplyOptions = {
+            1: ["Strongly prefer working independently", "Prefer working independently", "No preference", "Prefer working in a team", "Strongly prefer working in a team"],
+            5: ["Definitely creative tasks", "Mostly creative tasks", "A mix of both", "Mostly analytical tasks", "Definitely analytical tasks"],
+            8: ["I love public speaking", "I'm comfortable with it", "Neutral", "I'm somewhat uncomfortable", "I avoid public speaking"],
+            15: ["Very important - I want to lead", "Important - I'm open to leadership", "Neutral", "Not very important", "I prefer individual contributor roles"]
+        };
+        
+        // Initialize UI
+        questionCount.addEventListener('input', () => {
+            totalQuestions = parseInt(questionCount.value);
+            countDisplay.textContent = totalQuestions;
+        });
+        
+        // Start Session
+        startSessionBtn.addEventListener('click', () => {
+            startSession();
+        });
+        
+        // Restart Session
+        restartSessionBtn.addEventListener('click', () => {
+            if (confirm("Are you sure you want to restart this session? All progress will be lost.")) {
+                resetSession();
+                startSession();
+            }
+        });
+        
+        // Send Message
+        sendBtn.addEventListener('click', sendResponse);
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendResponse();
+            }
+        });
+        
+        // Skip Question
+        skipBtn.addEventListener('click', () => {
+            addMessage("User skipped this question", "user");
+            currentQuestion++;
+            updateProgress();
+            if (currentQuestion < totalQuestions) {
+                setTimeout(() => askQuestion(currentQuestion), 800);
+            } else {
+                endSession();
+            }
+        });
+        
+        // Functions
+        function startSession() {
+            sessionActive = true;
+            currentQuestion = 0;
+            userResponses = [];
+            sessionData = {
+                skills: [],
+                interests: [],
+                values: [],
+                personalityTraits: []
+            };
+            
+            // Update UI
+            welcomeMessage.style.display = "none";
+            chatContainer.innerHTML = "";
+            inputArea.style.display = "flex";
+            skipArea.style.display = "block";
+            resultsSection.style.display = "none";
+            startSessionBtn.disabled = true;
+            restartSessionBtn.disabled = false;
+            questionCount.disabled = true;
+            
+            // Add welcome message
+            addMessage("Hello! I'm CareerPath Explorer, powered by Groq AI. I'll ask you " + totalQuestions + " questions to help identify potential career paths that match your skills, interests, and goals. There are no right or wrong answers - just be yourself!", "ai");
+            
+            // Start questions
+            setTimeout(() => askQuestion(currentQuestion), 1500);
+        }
+        
+        function resetSession() {
+            sessionActive = false;
+            currentQuestion = 0;
+            userResponses = [];
+            sessionData = {
+                skills: [],
+                interests: [],
+                values: [],
+                personalityTraits: []
+            };
+            
+            // Update UI
+            welcomeMessage.style.display = "block";
+            chatContainer.innerHTML = "";
+            inputArea.style.display = "none";
+            skipArea.style.display = "none";
+            quickReplies.style.display = "none";
+            quickReplies.innerHTML = "";
+            resultsSection.style.display = "none";
+            startSessionBtn.disabled = false;
+            restartSessionBtn.disabled = true;
+            questionCount.disabled = false;
+            
+            // Reset progress
+            updateProgress();
+        }
+        
+        function askQuestion(index) {
+            if (index >= questionBank.length) index = questionBank.length - 1;
+            
+            const question = questionBank[index];
+            addMessage(question, "ai");
+            
+            // Show quick replies if available
+            if (quickReplyOptions[index]) {
+                quickReplies.innerHTML = "";
+                quickReplyOptions[index].forEach((option, i) => {
+                    const btn = document.createElement('button');
+                    btn.className = "bg-gray-100 hover:bg-gray-200 text-gray-800 py-2 px-3 rounded-md text-sm";
+                    btn.textContent = option;
+                    btn.addEventListener('click', () => {
+                        userInput.value = option;
+                        sendResponse();
+                    });
+                    quickReplies.appendChild(btn);
+                });
+                quickReplies.style.display = "grid";
+            } else {
+                quickReplies.style.display = "none";
+            }
+            
+            // Focus input
+            userInput.focus();
+        }
+        
+        function sendResponse() {
+            const response = userInput.value.trim();
+            if (response === "") return;
+            
+            addMessage(response, "user");
+            userResponses.push({
+                question: questionBank[currentQuestion],
+                answer: response
+            });
+            
+            // Process response (in a real app, this would be done via Groq API)
+            processResponse(response);
+            
+            // Clear input
+            userInput.value = "";
+            
+            // Move to next question or end session
+            currentQuestion++;
+            updateProgress();
+            if (currentQuestion < totalQuestions) {
+                setTimeout(() => askQuestion(currentQuestion), 800);
+            } else {
+                endSession();
+            }
+        }
+        
+        function processResponse(response) {
+            // This is a simplified version - in reality, you'd send this to Groq API for analysis
+            const lowerResponse = response.toLowerCase();
+            
+            // Extract skills
+            if (currentQuestion === 0 || currentQuestion === 3) {
+                const skillWords = ["skill", "learned", "developed", "ability", "excel", "good at"];
+                if (skillWords.some(word => lowerResponse.includes(word))) {
+                    const skills = extractKeywords(response);
+                    sessionData.skills = [...new Set([...sessionData.skills, ...skills])];
+                }
+            }
+            
+            // Extract interests
+            if (currentQuestion === 2 || currentQuestion === 7) {
+                const interestWords = ["interested", "curious", "passion", "enjoy", "like", "love"];
+                if (interestWords.some(word => lowerResponse.includes(word))) {
+                    const interests = extractKeywords(response);
+                    sessionData.interests = [...new Set([...sessionData.interests, ...interests])];
+                }
+            }
+            
+            // Extract personality traits
+            if (currentQuestion === 1 || currentQuestion === 5 || currentQuestion === 8 || currentQuestion === 15) {
+                const traitWords = ["prefer", "comfortable", "like", "enjoy", "rather", "would rather"];
+                if (traitWords.some(word => lowerResponse.includes(word))) {
+                    const traits = extractKeywords(response);
+                    sessionData.personalityTraits = [...new Set([...sessionData.personalityTraits, ...traits])];
+                }
+            }
+            
+            // Extract values
+            if (currentQuestion === 9 || currentQuestion === 11 || currentQuestion === 15 || currentQuestion === 16) {
+                const valueWords = ["important", "value", "priority", "care about", "matters"];
+                if (valueWords.some(word => lowerResponse.includes(word))) {
+                    const values = extractKeywords(response);
+                    sessionData.values = [...new Set([...sessionData.values, ...values])];
+                }
+            }
+        }
+        
+        function extractKeywords(text) {
+            // Simple keyword extraction - in reality, you'd use NLP via Groq API
+            const commonWords = new Set(["the", "and", "that", "have", "for", "not", "with", "you", "this", "but", "his", "from", "they", "will", "would", "there", "their", "what", "about", "which", "when", "can", "your", "said", "could", "been", "who", "them", "than", "then", "now", "only", "like", "just", "know", "take", "into", "year", "some", "come", "over", "think", "also", "back", "after", "used", "two", "how", "our", "work", "first", "well", "way", "even", "new", "want", "because", "any", "these", "give", "most", "us"]);
+            
+            return text.split(/[\s,.!?;:]+/)
+                .filter(word => word.length > 3 && !commonWords.has(word.toLowerCase()))
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
+        }
+        
+        function endSession() {
+            sessionActive = false;
+            inputArea.style.display = "none";
+            skipArea.style.display = "none";
+            quickReplies.style.display = "none";
+            
+            // Show summary message
+            addMessage("Thank you for completing the assessment! I'm analyzing your responses to generate personalized career recommendations...", "ai");
+            
+            // Simulate processing delay
+            setTimeout(() => {
+                chatContainer.innerHTML += `
+                    <div class="flex mb-4 fade-in">
+                        <div class="flex-shrink-0 mr-3">
+                            <div class="bg-indigo-100 text-indigo-800 rounded-full w-10 h-10 flex items-center justify-center">
+                                <i class="fas fa-check"></i>
+                            </div>
+                        </div>
+                        <div class="bg-indigo-50 rounded-lg p-4">
+                            <p class="text-indigo-800">Analysis complete! Scroll down to view your detailed results.</p>
+                        </div>
+                    </div>
+                `;
+                
+                // Scroll to results
+                setTimeout(() => {
+                    resultsSection.style.display = "block";
+                    generateResults();
+                    resultsSection.scrollIntoView({ behavior: "smooth" });
+                }, 1000);
+            }, 2000);
+        }
+        
+        function generateResults() {
+            // Generate skills cloud
+            skillsCloud.innerHTML = "";
+            const skills = sessionData.skills.length > 0 ? sessionData.skills : ["Communication", "Problem-solving", "Teamwork", "Adaptability"];
+            skills.forEach((skill, i) => {
+                const pill = document.createElement('div');
+                const sizeClass = i % 3 === 0 ? "px-4 py-2 text-lg" : i % 2 === 0 ? "px-3 py-1.5 text-base" : "px-2.5 py-1 text-sm";
+                pill.className = `skill-pill bg-indigo-100 text-indigo-800 ${sizeClass} rounded-full font-medium`;
+                pill.textContent = skill;
+                skillsCloud.appendChild(pill);
+            });
+            
+            // Generate career recommendations (simplified)
+            careerRecommendations.innerHTML = "";
+            const recommendations = [
+                {
+                    title: "Software Developer",
+                    match: "85%",
+                    description: "Based on your analytical skills and interest in technology, this role would allow you to solve complex problems and create innovative solutions."
+                },
+                {
+                    title: "Project Manager",
+                    match: "78%",
+                    description: "Your teamwork preference and organizational skills suggest you'd excel in coordinating projects and leading teams."
+                },
+                {
+                    title: "UX Designer",
+                    match: "72%",
+                    description: "Your creative interests and user-focused responses indicate potential in designing engaging user experiences."
+                }
+            ];
+            
+            recommendations.forEach(rec => {
+                const recEl = document.createElement('div');
+                recEl.className = "bg-white border border-gray-200 rounded-lg p-4 shadow-sm";
+                recEl.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <h4 class="font-bold text-lg">${rec.title}</h4>
+                        <span class="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full">${rec.match} Match</span>
+                    </div>
+                    <p class="text-gray-600 text-sm">${rec.description}</p>
+                    <div class="mt-3 flex justify-between items-center">
+                        <div class="w-full bg-gray-200 rounded-full h-1.5">
+                            <div class="bg-green-600 h-1.5 rounded-full" style="width: ${rec.match}"></div>
+                        </div>
+                    </div>
+                `;
+                careerRecommendations.appendChild(recEl);
+            });
+            
+            // Generate action plan
+            actionPlan.innerHTML = "";
+            const actions = [
+                { icon: "book", text: "Take an advanced course in JavaScript to strengthen your technical skills" },
+                { icon: "network-wired", text: "Attend 2-3 local tech meetups to expand your professional network" },
+                { icon: "user-tie", text: "Schedule informational interviews with professionals in your top career choices" },
+                { icon: "tasks", text: "Create a 90-day learning plan focusing on your skill gaps" }
+            ];
+            
+            actions.forEach(action => {
+                const actionEl = document.createElement('div');
+                actionEl.className = "flex items-start";
+                actionEl.innerHTML = `
+                    <div class="flex-shrink-0 bg-indigo-100 text-indigo-600 rounded-lg p-2 mr-3">
+                        <i class="fas fa-${action.icon}"></i>
+                    </div>
+                    <p class="text-gray-800">${action.text}</p>
+                `;
+                actionPlan.appendChild(actionEl);
+            });
+            
+            // Generate mind map
+            setTimeout(() => generateMindMap(), 300);
+        }
+        
+        function generateMindMap() {
+            const container = document.getElementById('mindmap');
+            const nodes = new vis.DataSet([
+                { id: 1, label: "You", shape: "ellipse", color: "#6366F1", font: { size: 18 } },
+                { id: 2, label: "Technical Skills", group: "skills", shape: "box", color: { background: "#E0E7FF", border: "#6366F1" } },
+                { id: 3, label: "Soft Skills", group: "skills", shape: "box", color: { background: "#E0E7FF", border: "#6366F1" } },
+                { id: 4, label: "Technology", group: "interests", shape: "diamond", color: { background: "#D1FAE5", border: "#10B981" } },
+                { id: 5, label: "Teamwork", group: "traits", shape: "circle", color: { background: "#FCE7F3", border: "#EC4899" } },
+                { id: 6, label: "Software Dev", group: "careers", shape: "hexagon", color: { background: "#FEF3C7", border: "#F59E0B" } },
+                { id: 7, label: "Project Manager", group: "careers", shape: "hexagon", color: { background: "#FEF3C7", border: "#F59E0B" } },
+                { id: 8, label: "JavaScript", group: "skills", shape: "box", color: { background: "#E0E7FF", border: "#6366F1" } },
+                { id: 9, label: "Problem Solving", group: "skills", shape: "box", color: { background: "#E0E7FF", border: "#6366F1" } },
+                { id: 10, label: "Communication", group: "skills", shape: "box", color: { background: "#E0E7FF", border: "#6366F1" } }
+            ]);
+            
+            const edges = new vis.DataSet([
+                { from: 1, to: 2, label: "has", arrows: "to", dashes: true },
+                { from: 1, to: 3, label: "has", arrows: "to", dashes: true },
+                { from: 1, to: 4, label: "interested in", arrows: "to", color: "#10B981" },
+                { from: 1, to: 5, label: "prefers", arrows: "to", color: "#EC4899" },
+                { from: 2, to: 8, arrows: "to" },
+                { from: 2, to: 9, arrows: "to" },
+                { from: 3, to: 10, arrows: "to" },
+                { from: 4, to: 6, arrows: "to" },
+                { from: 5, to: 7, arrows: "to" },
+                { from: 9, to: 6, arrows: "to" },
+                { from: 10, to: 7, arrows: "to" }
+            ]);
+            
+            const groups = {
+                skills: { color: { border: "#6366F1", background: "#E0E7FF" } },
+                interests: { color: { border: "#10B981", background: "#D1FAE5" } },
+                traits: { color: { border: "#EC4899", background: "#FCE7F3" } },
+                careers: { color: { border: "#F59E0B", background: "#FEF3C7" } }
+            };
+            
+            const data = { nodes, edges, groups };
+            const options = {
+                layout: {
+                    hierarchical: {
+                        direction: "UD",
+                        sortMethod: "directed",
+                        nodeSpacing: 150,
+                        levelSeparation: 120
+                    }
+                },
+                physics: {
+                    hierarchicalRepulsion: {
+                        nodeDistance: 200
+                    }
+                },
+                nodes: {
+                    shapeProperties: {
+                        useBorderWithImage: true
+                    }
+                },
+                edges: {
+                    smooth: {
+                        type: "cubicBezier",
+                        forceDirection: "vertical"
+                    }
+                },
+                groups
+            };
+            
+            new vis.Network(container, data, options);
+        }
+        
+        function addMessage(text, sender) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `flex mb-4 fade-in ${sender === 'user' ? 'justify-end' : ''}`;
+            
+            messageDiv.innerHTML = `
+                ${sender === 'ai' ? `
+                    <div class="flex-shrink-0 mr-3">
+                        <div class="bg-indigo-100 text-indigo-800 rounded-full w-10 h-10 flex items-center justify-center">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                    </div>
+                ` : ''}
+                <div class="${sender === 'user' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-800'} rounded-lg p-4 max-w-3/4">
+                    <p>${text}</p>
+                </div>
+                ${sender === 'user' ? `
+                    <div class="flex-shrink-0 ml-3">
+                        <div class="bg-gray-200 text-gray-800 rounded-full w-10 h-10 flex items-center justify-center">
+                            <i class="fas fa-user"></i>
+                        </div>
+                    </div>
+                ` : ''}
+            `;
+            
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+        
+        function updateProgress() {
+            const progress = Math.round((currentQuestion / totalQuestions) * 100);
+            const circumference = 2 * Math.PI * 15;
+            const offset = circumference - (progress / 100) * circumference;
+            
+            progressCircle.style.strokeDashoffset = offset;
+            progressText.textContent = `${progress}%`;
+            questionCounter.textContent = `Question ${Math.min(currentQuestion, totalQuestions)}/${totalQuestions}`;
+            
+            // Update progress ring color based on completion
+            if (progress < 30) {
+                progressCircle.classList.remove('text-indigo-600', 'text-green-500', 'text-yellow-500');
+                progressCircle.classList.add('text-indigo-600');
+            } else if (progress < 70) {
+                progressCircle.classList.remove('text-indigo-600', 'text-green-500', 'text-yellow-500');
+                progressCircle.classList.add('text-yellow-500');
+            } else {
+                progressCircle.classList.remove('text-indigo-600', 'text-green-500', 'text-yellow-500');
+                progressCircle.classList.add('text-green-500');
+            }
+        }
+        
+        // Initialize progress circle
+        document.addEventListener('DOMContentLoaded', () => {
+            const circumference = 2 * Math.PI * 15;
+            progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
+            progressCircle.style.strokeDashoffset = circumference;
+        });
+    </script>
+</body>
+</html>
