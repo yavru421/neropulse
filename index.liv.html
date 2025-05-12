@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Groq Chat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="manifest" href="/manifest.json">
+  <style>
+    @supports (padding: max(0px)) {
+      .safe-area {
+        padding-left: max(12px, env(safe-area-inset-left));
+        padding-right: max(12px, env(safe-area-inset-right));
+        padding-bottom: max(16px, env(safe-area-inset-bottom));
+      }
+    }
+    
+    .message-enter {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    .message-enter-active {
+      opacity: 1;
+      transform: translateY(0);
+      transition: opacity 300ms, transform 300ms;
+    }
+    
+    .typing-indicator {
+      display: inline-flex;
+      align-items: center;
+    }
+    .typing-indicator span {
+      height: 8px;
+      width: 8px;
+      background-color: #6b7280;
+      border-radius: 50%;
+      display: inline-block;
+      margin: 0 2px;
+      animation: bounce 1.5s infinite ease-in-out;
+    }
+    .typing-indicator span:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+    .typing-indicator span:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+    @keyframes bounce {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-5px); }
+    }
+    
+    .suggestion-btn {
+      transition: all 0.2s ease;
+    }
+    .suggestion-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Custom scrollbar for chat */
+    .chat-container::-webkit-scrollbar {
+      width: 5px;
+    }
+    .chat-container::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+    .chat-container::-webkit-scrollbar-thumb {
+      background: #888;
+      border-radius: 10px;
+    }
+    .chat-container::-webkit-scrollbar-thumb:hover {
+      background: #555;
+    }
+    
+    /* Markdown styling */
+    .markdown p {
+      margin-bottom: 1em;
+    }
+    .markdown pre {
+      background-color: #f5f5f5;
+      border-radius: 6px;
+      padding: 12px;
+      overflow-x: auto;
+      margin: 1em 0;
+    }
+    .markdown code {
+      background-color: #f5f5f5;
+      padding: 2px 4px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+    .markdown ul, .markdown ol {
+      padding-left: 1.5em;
+      margin-bottom: 1em;
+    }
+    .markdown li {
+      margin-bottom: 0.5em;
+    }
+    .markdown strong {
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 font-sans safe-area">
+  <div class="flex flex-col h-screen max-w-md mx-auto">
+    <!-- Header -->
+    <header class="bg-white shadow-sm py-4 px-4 flex items-center justify-between sticky top-0 z-10">
+      <h1 class="text-xl font-semibold text-gray-800">Groq Chat</h1>
+      <button id="settings-btn" class="text-gray-500 hover:text-gray-700">
+        <i class="fas fa-cog"></i>
+      </button>
+    </header>
+    
+    <!-- Chat container -->
+    <div id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-4 chat-container">
+      <!-- Welcome message -->
+      <div class="message-enter">
+        <div class="flex items-start">
+          <div class="flex-shrink-0 bg-gray-200 rounded-full p-2">
+            <i class="fas fa-robot text-gray-600"></i>
+          </div>
+          <div class="ml-3">
+            <div class="bg-gray-100 rounded-lg p-3">
+              <p class="text-gray-800">Hello! I'm your Groq-powered AI assistant. How can I help you today?</p>
+            </div>
+            <p class="text-xs text-gray-500 mt-1">Powered by Compound Beta</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Suggestions container -->
+    <div id="suggestions-container" class="px-4 pb-2 hidden">
+      <div class="flex flex-wrap gap-2 mb-2">
+        <p class="text-sm text-gray-500 w-full">Suggestions:</p>
+      </div>
+    </div>
+    
+    <!-- Input area -->
+    <div class="bg-white border-t border-gray-200 p-4 sticky bottom-0">
+      <form id="chat-form" class="flex items-end gap-2">
+        <div class="flex-1 relative">
+          <textarea 
+            id="message-input" 
+            rows="1" 
+            placeholder="Message Groq Chat..." 
+            class="w-full border border-gray-300 rounded-lg py-2 px-3 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+            style="min-height: 44px; max-height: 120px;"
+          ></textarea>
+          <button 
+            type="button" 
+            id="send-btn" 
+            class="absolute right-2 bottom-2 bg-blue-500 text-white rounded-full p-2 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled
+          >
+            <i class="fas fa-paper-plane"></i>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+  
+  <!-- Settings modal -->
+  <div id="settings-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-semibold">Settings</h2>
+        <button id="close-settings" class="text-gray-500 hover:text-gray-700">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      
+      <div class="space-y-4">
+        <div>
+          <label for="api-key" class="block text-sm font-medium text-gray-700 mb-1">Groq API Key</label>
+          <input 
+            type="password" 
+            id="api-key" 
+            placeholder="Enter your GROQ_API_KEY" 
+            class="w-full border border-gray-300 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+          <p class="text-xs text-gray-500 mt-1">Get your key from <a href="https://console.groq.com" target="_blank" class="text-blue-500 hover:underline">Groq Console</a></p>
+        </div>
+        
+        <div class="pt-2">
+          <button id="save-settings" class="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600">
+            Save Settings
+          </button>
+        </div>
+        
+        <div class="border-t border-gray-200 pt-4">
+          <button id="clear-chat" class="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200">
+            Clear Chat History
+          </button>
+        </div>
+        
+        <div class="text-center text-xs text-gray-500 pt-4">
+          <p>Version 1.0.0</p>
+          <p class="mt-1">Powered by Groq Compound Beta</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // DOM elements
+    const chatForm = document.getElementById('chat-form');
+    const messageInput = document.getElementById('message-input');
+    const sendBtn = document.getElementById('send-btn');
+    const chatContainer = document.getElementById('chat-container');
+    const suggestionsContainer = document.getElementById('suggestions-container');
+    const settingsBtn = document.getElementById('settings-btn');
+    const settingsModal = document.getElementById('settings-modal');
+    const closeSettings = document.getElementById('close-settings');
+    const saveSettings = document.getElementById('save-settings');
+    const apiKeyInput = document.getElementById('api-key');
+    const clearChat = document.getElementById('clear-chat');
+    
+    // State
+    let conversationHistory = [];
+    let isGenerating = false;
+    
+    // Initialize the app
+    function init() {
+      loadSettings();
+      loadConversation();
+      setupEventListeners();
+      autoResizeTextarea();
+    }
+    
+    // Set up event listeners
+    function setupEventListeners() {
+      // Form submission
+      chatForm.addEventListener('submit', handleSubmit);
+      
+      // Input changes
+      messageInput.addEventListener('input', () => {
+        sendBtn.disabled = messageInput.value.trim() === '';
+      });
+      
+      // Settings
+      settingsBtn.addEventListener('click', () => {
+        settingsModal.classList.remove('hidden');
+      });
+      
+      closeSettings.addEventListener('click', () => {
+        settingsModal.classList.add('hidden');
+      });
+      
+      saveSettings.addEventListener('click', saveSettingsHandler);
+      
+      clearChat.addEventListener('click', clearChatHandler);
+      
+      // Click outside modal to close
+      settingsModal.addEventListener('click', (e) => {
+        if (e.target === settingsModal) {
+          settingsModal.classList.add('hidden');
+        }
+      });
+      
+      // Keyboard shortcuts
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey && messageInput.value.trim() && !isGenerating) {
+          e.preventDefault();
+          handleSubmit(e);
+        }
+      });
+    }
+    
+    // Auto-resize textarea
+    function autoResizeTextarea() {
+      messageInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight > 120 ? 120 : this.scrollHeight) + 'px';
+      });
+    }
+    
+    // Handle form submission
+    async function handleSubmit(e) {
+      e.preventDefault();
+      const message = messageInput.value.trim();
+      if (!message || isGenerating) return;
+      
+      // Add user message to chat
+      addMessageToChat('user', message);
+      messageInput.value = '';
+      sendBtn.disabled = true;
+      messageInput.style.height = '44px';
+      
+      // Add to conversation history
+      conversationHistory.push({ role: 'user', content: message });
+      
+      // Show typing indicator
+      const typingId = showTypingIndicator();
+      isGenerating = true;
+      
+      try {
+        // Call Groq API
+        const response = await callGroqAPI(conversationHistory);
+        
+        // Remove typing indicator
+        removeTypingIndicator(typingId);
+        
+        if (response) {
+          // Add assistant response to chat
+          addMessageToChat('assistant', response.response);
+          
+          // Add to conversation history
+          conversationHistory.push({ role: 'assistant', content: response.response });
+          
+          // Show suggestions if available
+          if (response.suggestions && response.suggestions.length > 0) {
+            showSuggestions(response.suggestions);
+          } else {
+            hideSuggestions();
+          }
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        removeTypingIndicator(typingId);
+        addMessageToChat('assistant', 'Sorry, I encountered an error. Please check your API key and try again.');
+      } finally {
+        isGenerating = false;
+        saveConversation();
+        scrollToBottom();
+      }
+    }
+    
+    // Call Groq API
+    async function callGroqAPI(messages) {
+      const apiKey = localStorage.getItem('GROQ_API_KEY');
+      if (!apiKey) {
+        settingsModal.classList.remove('hidden');
+        throw new Error('API key not set');
+      }
+      
+      // Prepare system message with instructions for suggestions
+      const systemMessage = {
+        role: 'system',
+        content: `You are a helpful, friendly, and proactive AI assistant powered by Groq's Compound Beta. Respond concisely to user queries, using web search or code execution when needed for accurate, up-to-date answers. After each response, analyze the conversation history and user intent to suggest 2-3 relevant follow-up prompts the user might ask next. Return a JSON object with "response" and "suggestions" fields where suggestions is an array of strings.`
+      };
+      
+      // Prepare the full messages array with system message first
+      const apiMessages = [systemMessage, ...messages];
+      
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'compound-beta',
+          messages: apiMessages,
+          temperature: 0.7,
+          response_format: { type: 'json_object' }
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API request failed with status ${response.status}`);
+      }
+      
+      const data = await response.json();
+      const content = data.choices[0].message.content;
+      
+      try {
+        return JSON.parse(content);
+      } catch (e) {
+        console.error('Failed to parse JSON response:', content);
+        return { response: content, suggestions: [] };
+      }
+    }
+    
+    // Add message to chat UI
+    function addMessageToChat(role, content) {
+      const messageDiv = document.createElement('div');
+      messageDiv.classList.add('flex', 'items-start', 'mt-4', 'message-enter');
+      
+      if (role === 'user') {
+        messageDiv.innerHTML = `
+          <div class="flex-shrink-0 bg-blue-500 rounded-full p-2">
+            <i class="fas fa-user text-white"></i>
+          </div>
+          <div class="ml-3">
+            <div class="bg-blue-500 text-white rounded-lg p-3">
+              <p>${escapeHtml(content)}</p>
+            </div>
+          </div>
+        `;
+      } else {
+        // Process markdown content
+        const processedContent = simpleMarkdown(content);
+        
+        messageDiv.innerHTML = `
+          <div class="flex-shrink-0 bg-gray-200 rounded-full p-2">
+            <i class="fas fa-robot text-gray-600"></i>
+          </div>
+          <div class="ml-3">
+            <div class="bg-gray-100 rounded-lg p-3 markdown">
+              ${processedContent}
+            </div>
+            <div class="flex items-center mt-2 space-x-2">
+              <button class="copy-btn text-xs text-gray-500 hover:text-gray-700 flex items-center">
+                <i class="fas fa-copy mr-1"></i> Copy
+              </button>
+            </div>
+            <p class="text-xs text-gray-500 mt-1">Powered by Compound Beta</p>
+          </div>
+        `;
+      }
+      
+      chatContainer.appendChild(messageDiv);
+      
+      // Add copy functionality
+      if (role === 'assistant') {
+        const copyBtn = messageDiv.querySelector('.copy-btn');
+        copyBtn.addEventListener('click', () => {
+          navigator.clipboard.writeText(content);
+          copyBtn.innerHTML = '<i class="fas fa-check mr-1"></i> Copied!';
+          setTimeout(() => {
+            copyBtn.innerHTML = '<i class="fas fa-copy mr-1"></i> Copy';
+          }, 2000);
+        });
+      }
+      
+      // Trigger animation
+      setTimeout(() => {
+        messageDiv.classList.add('message-enter-active');
+      }, 10);
+      
+      scrollToBottom();
+    }
+    
+    // Show typing indicator
+    function showTypingIndicator() {
+      const typingId = 'typing-' + Date.now();
+      const typingDiv = document.createElement('div');
+      typingDiv.id = typingId;
+      typingDiv.classList.add('flex', 'items-start', 'mt-4');
+      
+      typingDiv.innerHTML = `
+        <div class="flex-shrink-0 bg-gray-200 rounded-full p-2">
+          <i class="fas fa-robot text-gray-600"></i>
+        </div>
+        <div class="ml-3">
+          <div class="bg-gray-100 rounded-lg p-3">
+            <div class="typing-indicator">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      chatContainer.appendChild(typingDiv);
+      scrollToBottom();
+      return typingId;
+    }
+    
+    // Remove typing indicator
+    function removeTypingIndicator(id) {
+      const typingElement = document.getElementById(id);
+      if (typingElement) {
+        typingElement.remove();
+      }
+    }
+    
+    // Show prompt suggestions
+    function showSuggestions(suggestions) {
+      suggestionsContainer.classList.remove('hidden');
+      const suggestionsDiv = suggestionsContainer.querySelector('.flex.flex-wrap');
+      
+      // Clear previous suggestions
+      suggestionsDiv.innerHTML = '<p class="text-sm text-gray-500 w-full">Suggestions:</p>';
+      
+      // Add new suggestions
+      suggestions.slice(0, 3).forEach(suggestion => {
+        const suggestionBtn = document.createElement('button');
+        suggestionBtn.classList.add(
+          'suggestion-btn',
+          'bg-gray-100',
+          'hover:bg-gray-200',
+          'text-gray-800',
+          'text-sm',
+          'px-3',
+          'py-2',
+          'rounded-full',
+          'whitespace-nowrap',
+          'overflow-hidden',
+          'text-ellipsis',
+          'max-w-full'
+        );
+        suggestionBtn.textContent = suggestion;
+        suggestionBtn.title = suggestion;
+        
+        suggestionBtn.addEventListener('click', () => {
+          messageInput.value = suggestion;
+          messageInput.focus();
+          sendBtn.disabled = false;
+          messageInput.dispatchEvent(new Event('input'));
+        });
+        
+        suggestionsDiv.appendChild(suggestionBtn);
+      });
+      
+      scrollToBottom();
+    }
+    
+    // Hide suggestions
+    function hideSuggestions() {
+      suggestionsContainer.classList.add('hidden');
+    }
+    
+    // Scroll to bottom of chat
+    function scrollToBottom() {
+      setTimeout(() => {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+      }, 100);
+    }
+    
+    // Save settings
+    function saveSettingsHandler() {
+      const apiKey = apiKeyInput.value.trim();
+      if (apiKey) {
+        localStorage.setItem('GROQ_API_KEY', apiKey);
+        alert('Settings saved successfully!');
+        settingsModal.classList.add('hidden');
+      } else {
+        alert('Please enter a valid API key');
+      }
+    }
+    
+    // Clear chat handler
+    function clearChatHandler() {
+      if (confirm('Are you sure you want to clear the chat history?')) {
+        conversationHistory = [];
+        chatContainer.innerHTML = `
+          <div class="message-enter">
+            <div class="flex items-start">
+              <div class="flex-shrink-0 bg-gray-200 rounded-full p-2">
+                <i class="fas fa-robot text-gray-600"></i>
+              </div>
+              <div class="ml-3">
+                <div class="bg-gray-100 rounded-lg p-3">
+                  <p class="text-gray-800">Hello! I'm your Groq-powered AI assistant. How can I help you today?</p>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">Powered by Compound Beta</p>
+              </div>
+            </div>
+          </div>
+        `;
+        hideSuggestions();
+        localStorage.removeItem('groq_chat_conversation');
+        setTimeout(() => {
+          document.querySelector('.message-enter').classList.add('message-enter-active');
+        }, 10);
+      }
+    }
+    
+    // Load settings
+    function loadSettings() {
+      const savedApiKey = localStorage.getItem('GROQ_API_KEY');
+      if (savedApiKey) {
+        apiKeyInput.value = savedApiKey;
+      }
+    }
+    
+    // Load conversation from localStorage
+    function loadConversation() {
+      const savedConversation = localStorage.getItem('groq_chat_conversation');
+      if (savedConversation) {
+        try {
+          conversationHistory = JSON.parse(savedConversation);
+          
+          // Re-render the conversation
+          chatContainer.innerHTML = '';
+          conversationHistory.forEach((message, index) => {
+            // Skip system messages
+            if (message.role === 'system') return;
+            
+            // Add welcome message if first message is from assistant
+            if (index === 0 && message.role === 'assistant') {
+              addMessageToChat('assistant', message.content);
+              return;
+            }
+            
+            addMessageToChat(message.role, message.content);
+          });
+        } catch (e) {
+          console.error('Failed to load conversation:', e);
+        }
+      }
+    }
+    
+    // Save conversation to localStorage
+    function saveConversation() {
+      localStorage.setItem('groq_chat_conversation', JSON.stringify(conversationHistory));
+    }
+    
+    // Simple markdown processor
+    function simpleMarkdown(text) {
+      // Process code blocks
+      text = text.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+      
+      // Process inline code
+      text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+      
+      // Process bold
+      text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      
+      // Process lists
+      text = text.replace(/^\s*-\s+(.*$)/gm, '<li>$1</li>');
+      text = text.replace(/^\s*\*\s+(.*$)/gm, '<li>$1</li>');
+      text = text.replace(/^\s*\d+\.\s+(.*$)/gm, '<li>$1</li>');
+      
+      // Process paragraphs (ensure each paragraph is wrapped)
+      text = text.split('\n\n').map(para => {
+        if (!para.startsWith('<') || !para.endsWith('>')) {
+          return `<p>${para}</p>`;
+        }
+        return para;
+      }).join('\n\n');
+      
+      return text;
+    }
+    
+    // Escape HTML
+    function escapeHtml(unsafe) {
+      return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+    
+    // Register service worker for PWA
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js')
+          .then(registration => {
+            console.log('ServiceWorker registration successful');
+          })
+          .catch(err => {
+            console.log('ServiceWorker registration failed: ', err);
+          });
+      });
+    }
+    
+    // Initialize the app
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
